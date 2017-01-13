@@ -1,0 +1,8 @@
+#build files
+CMake*
+!CMakeLists.txt
+Makefile
+.clang_complete
+*.DS_Store
+pokerbots
+*.txt
