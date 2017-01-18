@@ -24,7 +24,11 @@ public class Player {
 	private final BufferedReader inStream;
 
 	private ArrayList<Card> hand;
+	private ArrayList<Card> board;
 	private HashMap<String, String> sets;
+	private HashMap<String, String> bucketer;
+	private ArrayList<String> handHistory;
+	private int pot;
 
 	public Player(PrintWriter output, BufferedReader input) {
 		this.outStream = output;
@@ -33,14 +37,23 @@ public class Player {
 		try (BufferedReader br = new BufferedReader(new FileReader("results.txt"))) {
 			String line;
 			while ((line = br.readLine()) != null) {
-				String split[] = line.split(":");
-				if (split.length > 1) {
-					sets.put(split[0], split[1]);
-					System.out.println(line);
+				int delim = line.indexOf(':');
+				if (delim != -1) {
+					sets.put(line.substring(0,delim), line.substring(delim+1));
 				}
 				if (line.equalsIgnoreCase("REGRETS")) {
 					break;
 				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		bucketer = new HashMap<>();
+		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/data/FlopAssignments.txt"))) {
+			String line;
+			while ((line = br.readLine()) != null) {
+				int delim = line.indexOf(' ');
+				bucketer.put(line.substring(0,delim), line.substring(delim+1));
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -60,19 +73,26 @@ public class Player {
 				
 				String type = list[0];
 				if ("GETACTION".compareToIgnoreCase(type) == 0) {
-					for(String action : list) {
-						if (action.compareToIgnoreCase("CHECK") == 0) {
-							outStream.println("CHECK");
-						} else if (action.compareToIgnoreCase("CALL") == 0){
-							outStream.println("CALL");
-						}
+					int index = 1;
+					pot = Integer.parseInt(list[index++]);
+					int numBoard = Integer.parseInt(list[index++]);
+					board = new ArrayList<>();
+					for (int i = 0; i < numBoard; ++i) {
+						board.add(new Card(list[index++], 1));
 					}
-					// When appropriate, reply to the engine with a legal
-					// action.
-					// The engine will ignore all spurious packets you send.
-					// The engine will also check/fold for you if you return an
-					// illegal action.
-					outStream.println("CHECK");
+					int numHistory = Integer.parseInt(list[index++]);
+					ArrayList<String> history = new ArrayList<>();
+					for (int i = 0; i < numHistory; ++i) {
+						history.add(list[index++]);
+					}
+					int numActions= Integer.parseInt(list[index++]);
+					ArrayList<String> actions = new ArrayList<>();
+					for (int i = 0; i < numActions; ++i) {
+						actions.add(list[index++]);
+					}
+					updateHistory(history);
+					String move = determineMove();
+					makeMove(move, actions);
 				} else if ("REQUESTKEYVALUES".compareToIgnoreCase(type) == 0) {
 					// At the end, engine will allow bot to send key/value pairs to store.
 					// FINISH indicates no more to store.
@@ -81,6 +101,9 @@ public class Player {
 					hand = new ArrayList<>();
 					hand.add(new Card(list[3], 0));
 					hand.add(new Card(list[4], 0));
+					handHistory = new ArrayList<>();
+					board = new ArrayList<>();
+					pot = 0;
 				}
 			}
 		} catch (IOException e) {
@@ -94,14 +117,14 @@ public class Player {
 			outStream.close();
 			inStream.close();
 		} catch (IOException e) {
-			System.out.println("Encounterd problem shutting down connections");
+			System.out.println("Encountered problem shutting down connections");
 			e.printStackTrace();
 		}
 	}
 
 	void translate(ArrayList<Card> cards) {
 		Collections.sort(cards, new RankComparator());
-		Collections.sort(cards, new SuitComparator());
+		Collections.sort(cards, new HandComparator());
 		HashMap<Integer, Integer> suitMapping = new HashMap<Integer, Integer>();
 		int openSuit = 0;
 		for (Card card : cards) {
@@ -116,6 +139,141 @@ public class Player {
 		Collections.sort(cards, new SuitComparator());
 		Collections.sort(cards, new RankComparator());
 		Collections.sort(cards, new HandComparator());
+	}
+
+	void updateHistory(ArrayList<String> pastActions) {
+		for (String action : pastActions) {
+			String[] words = action.split(":");
+			if (words[0].equalsIgnoreCase("WIN")) {
+
+			} else if (words[0].equalsIgnoreCase("TIE")) {
+
+			} else if (words[0].equalsIgnoreCase("SHOW")) {
+
+			} else if (words[0].equalsIgnoreCase("REFUND")) {
+
+			} else if (words[0].equalsIgnoreCase("RAISE")) {
+				handHistory.add("RAISE");
+			} else if (words[0].equalsIgnoreCase("DISCARD")) {
+
+			} else if (words[0].equalsIgnoreCase("POST")) {
+
+			} else if (words[0].equalsIgnoreCase("FOLD")) {
+				handHistory.add("FOLD");
+			} else if (words[0].equalsIgnoreCase("DEAL")) {
+
+			} else if (words[0].equalsIgnoreCase("CHECK")) {
+				handHistory.add("CHECK");
+			} else if (words[0].equalsIgnoreCase("CALL")) {
+				handHistory.add("CALL");
+			} else if (words[0].equalsIgnoreCase("BET")) {
+				handHistory.add("BET");
+			}
+		}
+	}
+
+	String determineMove() {
+		ArrayList<Card> cards = new ArrayList<>();
+		for (Card c : hand) {
+			cards.add(new Card(c));
+		}
+		for (Card c : board) {
+			cards.add(new Card(c));
+		}
+		translate(cards);
+
+		String key = "";
+		String cardset = "";
+		for (Card c : cards) {
+			cardset += c.toString();
+		}
+		if (board.size() == 0) {
+			key += cardset;
+		} else if (board.size() == 3) {
+			key += bucketer.get(cardset);
+		} else if (board.size() == 4) {
+
+		} else if (board.size() == 5) {
+
+		}
+		for (String s : handHistory) {
+			key += "_" + s;
+		}
+
+		String val = sets.get(key);
+		if (val != null) {
+			String words[] = sets.get(key).split(" ");
+			String actions[] = words[0].split("_");
+			ArrayList<Double> probs = new ArrayList<>();
+			double total = 0;
+			for (int i = 1; i < words.length; ++i) {
+				double value = Double.parseDouble(words[i]);
+				total += value;
+				probs.add(value);
+			}
+			double rand = Math.random();
+			double counter = 0;
+			for (int i = 0; i < probs.size(); ++i) {
+				counter += probs.get(i) / total;
+				if (rand < counter) {
+					return actions[i];
+				}
+			}
+			return actions[actions.length - 1];
+		} else {
+			System.out.println("ERROR: KEY " + key + " NOT FOUND. CARDSET "+cardset);
+			return "ERROR";
+		}
+	}
+
+	void makeMove(String move, ArrayList<String> possibleActions) {
+		if (move.equalsIgnoreCase("RAISE")) {
+			for (String action : possibleActions) {
+				String words[] = action.split(":");
+				if (words[0].equalsIgnoreCase("RAISE")) {
+					int min = Integer.parseInt(words[1]);
+					int max = Integer.parseInt(words[2]);
+					if (pot < min) {
+						outStream.println("RAISE:"+min);
+					} else if (pot > max) {
+						outStream.println("RAISE:"+max);
+					} else {
+						outStream.println("RAISE:"+pot);
+					}
+				}
+			}
+		} else if (move.equalsIgnoreCase("BET")) {
+			for (String action : possibleActions) {
+				String words[] = action.split(":");
+				if (words[0].equalsIgnoreCase("BET")) {
+					int min = Integer.parseInt(words[1]);
+					int max = Integer.parseInt(words[2]);
+					if (pot < min) {
+						outStream.println("BET:"+min);
+					} else if (pot > max) {
+						outStream.println("BET:"+max);
+					} else {
+						outStream.println("BET:"+pot);
+					}
+				}
+			}
+		}
+		else if (move.equalsIgnoreCase("CALL")) {
+			outStream.println("CALL");
+		} else if (move.equalsIgnoreCase("FOLD")) {
+			outStream.println("FOLD");
+		} else if (move.equalsIgnoreCase("CHECK")) {
+			outStream.println("CHECK");
+		} else {
+			for(String action : possibleActions) {
+				if (action.compareToIgnoreCase("CHECK") == 0) {
+					outStream.println("CHECK");
+				} else if (action.compareToIgnoreCase("CALL") == 0){
+					outStream.println("CALL");
+				}
+			}
+			System.out.println("ERROR: ATTEMPING TO DO MOVE "+move);
+		}
 	}
 	
 }

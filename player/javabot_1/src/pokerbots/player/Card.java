@@ -22,6 +22,12 @@ public class Card {
         hand = inHand;
     }
 
+    Card(Card copy) {
+        this.suit = copy.suit;
+        this.rank = copy.rank;
+        this.hand = copy.hand;
+    }
+
     @Override
     public String toString() {
         char ranks[] = {'2','3','4','5','6','7','8','9','T','J','Q','K','A'};
