@@ -6,3 +6,15 @@ Makefile
 *.DS_Store
 pokerbots
 *.txt
+
+data/
+*.jar
+*.dump
+*.db
+player/javabot_1/.idea/
+player/javabot_1/.project
+player/javabot_1/javabot_1.iml
+player/javabot_1/player.iml
+player/javabot_1/pokerbot.bat
+player/javabot_1/pokerbot.sh
+player/javabot_2/
