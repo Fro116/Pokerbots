@@ -51,26 +51,27 @@ public class Main {
 	}
 	
 	public static void main(String[] args) {
-		try {
-			// Socket which will connect to the engine.
-			Socket socket = parseArgsToSocket(args);
-			if (socket == null) {
-				return;
-			}
-			// Convenience wrapper to write back to engine
-			PrintWriter outStream = new PrintWriter(socket.getOutputStream(), true);
-			// Reader to read packets from engine
-			BufferedReader inStream = new BufferedReader(new InputStreamReader(
-					socket.getInputStream()));
+//		try {
+//			// Socket which will connect to the engine.
+//			Socket socket = parseArgsToSocket(args);
+//			if (socket == null) {
+//				return;
+//			}
+//			// Convenience wrapper to write back to engine
+//			PrintWriter outStream = new PrintWriter(socket.getOutputStream(), true);
+//			// Reader to read packets from engine
+//			BufferedReader inStream = new BufferedReader(new InputStreamReader(
+//					socket.getInputStream()));
 			
-			Player player = new Player(outStream, inStream);
+//			Player player = new Player(outStream, inStream);
+			Player player = new Player(null, null);
 			player.run();
 			
-			socket.close();
-		} catch (IOException e) {
-			System.err.println(e.getMessage());
-			System.exit(1);
-		}
+//			socket.close();
+//		} catch (IOException e) {
+//			System.err.println(e.getMessage());
+//			System.exit(1);
+//		}
 	}
 
 }

@@ -19,6 +19,12 @@
 #include <boost/algorithm/string.hpp>
 #include <pbots_calc.h>
 
+#include "Random.h"
+#include "Card.h"
+
+std::string ranks[] = {"2","3","4","5","6","7","8","9","T","J","Q","K","A"};
+std::string suits[] = {"c","d","h","s"};
+
 std::vector<std::vector<int>> genHands() {
   std::vector<std::vector<int>> ans;
   for (int a = 0; a < 52; ++a) {
@@ -90,8 +96,6 @@ std::vector<std::vector<int>> genRivers() {
 }
 
 std::unordered_set<std::string> abstractBoards(std::vector<std::vector<int>> boardFields, std::vector<std::vector<int>> handFields) {
-  char ranks[] = {'2','3','4','5','6','7','8','9','T','J','Q','K','A'};
-  char suits[] = {'c','d','h','s'};
   int i = 0;
   std::unordered_set<std::string> boards;
   for (auto bfield : boardFields) {
@@ -114,12 +118,8 @@ std::unordered_set<std::string> abstractBoards(std::vector<std::vector<int>> boa
 	for (auto card : hfield) {
 	  cards.push_back(std::make_tuple(card/4,card%4, 0));
 	}      
-	std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {
-	    return std::get<0>(left) < std::get<0>(right);
-	  });
-	std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {
-	    return std::get<2>(left) < std::get<2>(right);
-	  });
+	std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {return std::get<0>(left) < std::get<0>(right);});
+	std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {return std::get<2>(left) < std::get<2>(right);});
 	std::unordered_map<int, int> suitMapping;
 	int openSuit = 0;
 	for (auto& card : cards) {
@@ -131,15 +131,9 @@ std::unordered_set<std::string> abstractBoards(std::vector<std::vector<int>> boa
 	    std::get<1>(card) = suitMapping[std::get<1>(card)];
 	  }
 	}
-	std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {
-	    return std::get<1>(left) < std::get<1>(right);
-	  });
-	std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {
-	    return std::get<0>(left) < std::get<0>(right);
-	  });
-	std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {
-	    return std::get<2>(left) < std::get<2>(right);
-	  });
+	std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {return std::get<1>(left) < std::get<1>(right);});
+	std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {return std::get<0>(left) < std::get<0>(right);});
+	std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {return std::get<2>(left) < std::get<2>(right); });
       
 	std::string board = "";
 	for (auto card : cards) {
@@ -161,8 +155,95 @@ std::unordered_set<std::string> abstractBoards(std::vector<std::vector<int>> boa
    return boards;
 }
 
-int main(int argc, char* argv[]) {
-  std::ifstream file("../data/TurnHands.txt");
+std::string translate(std::vector<Card> bfield, std::vector<Card> hfield) {
+  std::vector<std::tuple<int, int, int>> cards;    
+  for (auto card : bfield) {
+    cards.push_back(std::make_tuple(card.rank(),card.suit(), 1));
+  }
+  for (auto card : hfield) {
+    cards.push_back(std::make_tuple(card.rank(),card.suit(), 0));
+  }      
+  std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {return std::get<0>(left) < std::get<0>(right);});
+  std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {return std::get<2>(left) < std::get<2>(right);});
+  std::unordered_map<int, int> suitMapping;
+  int openSuit = 0;
+  for (auto& card : cards) {
+    if (suitMapping.find(std::get<1>(card)) == suitMapping.end()) {
+      suitMapping[std::get<1>(card)] = openSuit;	      
+      std::get<1>(card) = openSuit;
+      openSuit++;
+    } else {
+      std::get<1>(card) = suitMapping[std::get<1>(card)];
+    }
+  }
+  std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {return std::get<1>(left) < std::get<1>(right);});
+  std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {return std::get<0>(left) < std::get<0>(right);});
+  std::stable_sort(cards.begin(), cards.end(), [](auto &left, auto &right) {return std::get<2>(left) < std::get<2>(right); });
+      
+  std::string board = "";
+  for (auto card : cards) {
+    board += ranks[std::get<0>(card)];
+    board += suits[std::get<1>(card)];	    
+  }
+  return board;
+}
+
+double distance(std::vector<double> a, std::vector<double> b) {
+  assert(a.size() == b.size());
+  double dist = 0;
+  for (std::size_t i = 0; i < a.size(); ++i) {
+    dist += (a[i] - b[i])*(a[i] - b[i]);
+  }
+  return dist;
+}
+
+void cluster(std::string distancesFile, std::string centersFile) {
+  std::vector<std::vector<double>> centers;
+  {
+    std::string line;
+    std::ifstream file(centersFile);
+    while (std::getline(file, line)) {
+      std::vector<double> center;    
+      std::vector<std::string> words;
+      boost::split(words, line, boost::is_any_of("\t "));
+      for (std::string word : words) {
+	center.push_back(std::stod(word));
+      }
+      centers.push_back(center);
+    }
+  }
+  {
+    std::string line;
+    std::ifstream file(distancesFile);
+    while (std::getline(file, line)) {
+      std::string name;          
+      std::vector<double> point;    
+      std::vector<std::string> words;
+      boost::trim(line);      
+      boost::split(words, line, boost::is_any_of("\t "));
+      for (std::size_t i = 0; i < words.size(); ++i) {
+	if (i == 0) {
+	  name = words[i];
+	} else {
+	  point.push_back(std::stod(words[i]));
+	}
+      }
+      double minDist = std::numeric_limits<double>::max();
+      int bucket = 0;
+      for (std::size_t i = 0; i < centers.size(); ++i) {
+	double dist = distance(point, centers[i]);
+	if (dist < minDist) {
+	  minDist = dist;
+	  bucket = i;
+	}
+      }
+      std::cout << name << " " << std::to_string(bucket) << std::endl;
+    }
+  }  
+}
+
+void computeDistances(std::string handsFile) {
+  std::ifstream file(handsFile);
   std::string line;
   Results* res = alloc_results();
   std::string dead = "";
@@ -170,7 +251,7 @@ int main(int argc, char* argv[]) {
     std::vector<std::string> words;
     boost::split(words, line, boost::is_any_of(" "));
     std::string hand = words[0]+words[1];
-    std::string board = words[2]+words[3]+words[4]+words[5];
+    std::string board = words[2]+words[3]+words[4]+words[5]+words[6];
     std::cout << hand << board;
     calc(const_cast<char*>((hand+":"+"23s,24s,25s,26s,27s,34s,35s,36s,37s,45s,46s,32o,43o,42o,54o,53o,52o,65o,64o,63o,62o,74o,73o,72o,83o,82o").c_str()), const_cast<char*>(board.c_str()), const_cast<char*>(dead.c_str()), 1000000, res);
     std::cout << " " << *(res->ev);
@@ -191,4 +272,212 @@ int main(int argc, char* argv[]) {
     std::cout << "\n";
   }
   free_results(res);       
+}
+
+int cardNumber(std::string name) {
+  int r = 0;
+  int s = 0;
+  std::string rank = name.substr(0,1);
+  std::string suit = name.substr(1,1);
+  for (int i = 0; i < 13; ++i) {
+    if (rank == ranks[i]) {
+      r = i;
+      break;
+    }
+  }
+  for (int i = 0; i < 4; ++i) {
+    if (suit == suits[i]) {
+      s = i;
+      break;
+    }
+  }
+  return 4*r+s;
+}
+
+void encodeTurnBuckets(std::string flopHandsFile, std::string turnBucketsFile) {
+  std::unordered_map<std::string, int> flops;
+  std::vector<std::string> turnBuckets;
+  {
+    std::string line;
+    std::ifstream file(flopHandsFile);
+    int i = 0;
+    while (std::getline(file, line)) {
+      flops[line] = i++;
+      turnBuckets.push_back("--------------------------------------------------------------------------------------------------------");
+    }
+  }
+  {
+    int iter = 0;
+    std::string line;
+    std::ifstream file(turnBucketsFile);
+    while (std::getline(file, line)) {      
+      auto loc = line.find_first_of(' ');
+      std::string key = line.substr(0, loc);
+      int bucket = std::stoi(line.substr(loc+1));
+      std::string val = std::to_string(bucket);
+      if (val.size() < 2) {
+	val = "0"+val;
+      }
+      std::size_t row = static_cast<std::size_t>(flops[key.substr(0,10)]);
+      std::size_t col = static_cast<std::size_t>(2*cardNumber(key.substr(10)));
+      turnBuckets[row][col] = val[0];
+      turnBuckets[row][col+1] = val[1];
+      std::cerr << iter++ << std::endl;      
+    }
+  }
+  for (std::string& str : turnBuckets) {
+    std::cout << str << std::endl;
+  }
+}
+
+Card getCard(std::vector<Card>& deck) {
+  int index = Random::integer(0, deck.size()-1);
+  Card c = deck[static_cast<std::size_t>(index)];
+  deck.erase(deck.begin()+index);
+  return c;
+}
+
+void genRandomTurns(int iterations) {
+  std::vector<Card> deck;
+  for (int rank = 0; rank < 13; ++rank) {
+    for (int suit = 0; suit < 4; ++suit) {
+      deck.push_back(Card(rank,suit));
+    }
+  }
+  for (int i = 0; i < iterations; ++i) {
+    auto copy = deck;
+    for (int j = 0; j < 7; ++j) {
+      std::cout << getCard(copy).toString() << " ";
+    }
+    std::cout << std::endl;
+  }
+}
+
+std::string createRange(std::string hand) {
+  std::string ans = "";
+  for (int rank = 0; rank < 13; ++rank) {
+    ans += hand.substr(0,1);
+    ans += ranks[rank];
+    ans += ",";	
+  }
+  ans.pop_back();
+  return ans;
+}
+
+void chooseDiscards(std::string distancesFile, std::string equityFile, std::string handsFile) {
+  std::unordered_map<std::string, double> equities;
+  std::unordered_map<std::string, double> singleEquities;  
+  {
+    std::string line;
+    std::ifstream file(distancesFile);
+    while (std::getline(file, line)) {
+      boost::trim(line);
+      std::vector<std::string> words;
+      boost::split(words, line, boost::is_any_of(" "));      
+      std::string key = words[0];
+      double eq = 0;
+      double weights[] = {0.168929, 0.14178, 0.12368, 0.152338, 0.105581, 0.155354, 0.120664, 0.0316742};
+      for (std::size_t i = 1; i < words.size(); ++i) {
+  	eq += std::stod(words[i])*weights[i-1];
+      }
+      equities[key] = eq;
+      // std::cout << line << std::endl;  
+    }
+  }
+  {
+    std::string line;
+    std::ifstream file(equityFile);
+    while (std::getline(file, line)) {
+      boost::trim(line);      
+      std::vector<std::string> words;
+      boost::split(words, line, boost::is_any_of(" "));      
+      std::string key = words[0];
+      double eq = std::stod(words[1]);
+      singleEquities[key] = eq;
+    }
+  }
+  {
+    std::ifstream file(handsFile);
+    std::string line;
+    while (std::getline(file, line)) {
+      std::string hand = line.substr(0,4);
+      std::string board = line.substr(4);
+      double maxeq = equities[line]/100;
+      std::string resp = "N";
+      std::vector<Card> boardc;
+      for (std::size_t i = 0; 2*i < board.size(); ++i) {
+	boardc.push_back(Card(board.substr(2*i, 2)));
+      }
+      std::vector<Card> handc1;      
+      handc1.push_back(Card(hand.substr(0,2)));
+      std::string key1 = translate(boardc,handc1);        
+      std::vector<Card> handc2;      
+      handc2.push_back(Card(hand.substr(2)));
+      std::string key2 = translate(boardc,handc2);
+      {
+  	double b = singleEquities[key1];
+  	if (b > maxeq) {
+  	  maxeq = b;
+  	  resp = "R";
+  	}
+      }
+      {
+  	double b = singleEquities[key2];
+  	if (b > maxeq) {
+  	  maxeq = b;
+  	  resp = "L";
+  	}
+      }      
+      std::cout << line << " " << resp << std::endl;
+    }
+  }
+}
+
+void computeSingleEquities(std::string handsFile) {
+  std::unordered_map<std::string, double> equities;
+  std::ifstream file(handsFile);
+  std::string line;
+  Results* res = alloc_results();
+  std::string dead = "";
+  while (std::getline(file, line)) {
+    std::string hand = line.substr(0,4);
+    std::string board = line.substr(4);
+    std::vector<Card> boardc;
+    for (std::size_t i = 0; 2*i < board.size(); ++i) {
+      boardc.push_back(Card(board.substr(2*i, 2)));
+    }
+    std::vector<Card> handc1;      
+    handc1.push_back(Card(hand.substr(0,2)));
+    std::string key1 = translate(boardc,handc1);        
+    std::vector<Card> handc2;      
+    handc2.push_back(Card(hand.substr(2)));
+    std::string key2 = translate(boardc,handc2);        
+    if (equities.find(key1) == equities.end()) {
+      calc(const_cast<char*>((createRange(hand.substr(0,2))+":"+"xx").c_str()), const_cast<char*>(board.c_str()), const_cast<char*>(dead.c_str()), 10000, res);
+      equities[key1] = *(res->ev);
+      std::cout << key1 << " " << *(res->ev) << std::endl;
+    }
+    if (equities.find(key2) == equities.end()) {
+      calc(const_cast<char*>((createRange(hand.substr(2))+":"+"xx").c_str()), const_cast<char*>(board.c_str()), const_cast<char*>(dead.c_str()), 10000, res);
+      equities[key2] = *(res->ev);
+      std::cout << key2 << " " << *(res->ev) << std::endl;      
+    }
+    // std::cout << line << std::endl;
+  }
+  free_results(res);
+}
+
+int main(int argc, char* argv[]) {
+  // computeEquities("../data/FlopHands.txt");  
+  // computeSingleEquities("../data/TurnHands.txt");
+  chooseDiscards("../data/TurnDistances.txt","../build/TurnSingleEquities.txt","../data/TurnHands.txt");
+  // genRandomTurns(1000000);
+  // encodeTurnBuckets("../data/FlopHands.txt", "../data/TurnAssignments.txt");
+  // for (int i = 0 ; i < 1300000 ; ++i) {
+  //   std::cout << "1234567890123456789012345678901234567890123456789012" << std::endl;
+  // }
+  // computeDistances("../build/tmp");
+  // cluster("../data/FlopDistances.txt", "../data/ClusterCenters.txt");
+  // cluster("../data/TurnDistances.txt", "../data/ClusterCenters.txt");  
+  // cluster("../data/TurnDistances.txt", "../data/TurnCenters.txt");  
 }

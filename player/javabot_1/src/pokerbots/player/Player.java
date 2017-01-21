@@ -4,10 +4,9 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
+import java.util.*;
+import java.io.*;
+
 
 /**
  * Simple example pokerbot, written in Java.
@@ -28,7 +27,11 @@ public class Player {
 	private HashMap<String, String> sets;
 	private HashMap<String, String> bucketer;
 	private ArrayList<String> handHistory;
+	private ArrayList<String> roundHistory;
+
+	private int roundContribution;
 	private int pot;
+	private int turn = 0;
 
 	public Player(PrintWriter output, BufferedReader input) {
 		this.outStream = output;
@@ -58,6 +61,18 @@ public class Player {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		ArrayList<String> list = new ArrayList<>();
+		final long startTime = System.currentTimeMillis();
+		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/build/tmp"))) {
+			String line;
+			while ((line = br.readLine()) != null) {
+				list.add(line);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		System.out.println("BYE " + (System.currentTimeMillis()-startTime));
+
 	}
 	
 	public void run() {
@@ -76,9 +91,9 @@ public class Player {
 					int index = 1;
 					pot = Integer.parseInt(list[index++]);
 					int numBoard = Integer.parseInt(list[index++]);
-					board = new ArrayList<>();
+					ArrayList<Card> newboard = new ArrayList<>();
 					for (int i = 0; i < numBoard; ++i) {
-						board.add(new Card(list[index++], 1));
+						newboard.add(new Card(list[index++], 1));
 					}
 					int numHistory = Integer.parseInt(list[index++]);
 					ArrayList<String> history = new ArrayList<>();
@@ -91,6 +106,12 @@ public class Player {
 						actions.add(list[index++]);
 					}
 					updateHistory(history);
+					if (numBoard != board.size()) {
+						board = newboard;
+						roundHistory.clear();
+						roundContribution = 0;
+						turn++;
+					}
 					String move = determineMove();
 					makeMove(move, actions);
 				} else if ("REQUESTKEYVALUES".compareToIgnoreCase(type) == 0) {
@@ -101,9 +122,16 @@ public class Player {
 					hand = new ArrayList<>();
 					hand.add(new Card(list[3], 0));
 					hand.add(new Card(list[4], 0));
+					if (list[2] == "true") {
+						roundContribution = 1;
+					} else {
+						roundContribution = 2;
+					}
 					handHistory = new ArrayList<>();
+					roundHistory = new ArrayList<>();
 					board = new ArrayList<>();
 					pot = 0;
+					turn = 0;
 				}
 			}
 		} catch (IOException e) {
@@ -153,21 +181,35 @@ public class Player {
 			} else if (words[0].equalsIgnoreCase("REFUND")) {
 
 			} else if (words[0].equalsIgnoreCase("RAISE")) {
-				handHistory.add("RAISE");
+				if (turn == 0) {
+					if (roundHistory.size() == 0) {
+						handHistory.add("RAISE167");
+						roundHistory.add("RAISE167");
+					} else {
+						handHistory.add("RAISE100");
+						roundHistory.add("RAISE100");
+					}
+				}
+				System.out.println("UPDATING RAISE "+ handHistory);
 			} else if (words[0].equalsIgnoreCase("DISCARD")) {
-
+				handHistory.add("CHECK");
+				roundHistory.add("CHECK");
 			} else if (words[0].equalsIgnoreCase("POST")) {
 
 			} else if (words[0].equalsIgnoreCase("FOLD")) {
 				handHistory.add("FOLD");
+				roundHistory.add("FOLD");
 			} else if (words[0].equalsIgnoreCase("DEAL")) {
 
 			} else if (words[0].equalsIgnoreCase("CHECK")) {
 				handHistory.add("CHECK");
+				roundHistory.add("CHECK");
 			} else if (words[0].equalsIgnoreCase("CALL")) {
 				handHistory.add("CALL");
+				roundHistory.add("CALL");
 			} else if (words[0].equalsIgnoreCase("BET")) {
 				handHistory.add("BET");
+				roundHistory.add("BET");
 			}
 		}
 	}
@@ -222,23 +264,37 @@ public class Player {
 			return actions[actions.length - 1];
 		} else {
 			System.out.println("ERROR: KEY " + key + " NOT FOUND. CARDSET "+cardset);
+			System.out.println("ROUND HISTORY "+roundHistory);
+			System.out.println("HAND HISTORY "+roundHistory);
+			//TODO better correction; find closest state
+			if (roundHistory.get(roundHistory.size()-1).startsWith("RAISE")) {
+				roundHistory.remove(roundHistory.size()-1);
+				handHistory.remove(handHistory.size()-1);
+				return determineMove();
+			}
 			return "ERROR";
 		}
 	}
 
 	void makeMove(String move, ArrayList<String> possibleActions) {
-		if (move.equalsIgnoreCase("RAISE")) {
+		if (move.startsWith("RAISE")) {
+			System.out.println("MOVE "+move);
+			double perc = Double.parseDouble(move.substring(5));
+			int amount = (int)(Math.round((pot*perc)/100)) + roundContribution;
 			for (String action : possibleActions) {
 				String words[] = action.split(":");
 				if (words[0].equalsIgnoreCase("RAISE")) {
 					int min = Integer.parseInt(words[1]);
 					int max = Integer.parseInt(words[2]);
-					if (pot < min) {
+					if (amount < min) {
+						roundContribution += min;
 						outStream.println("RAISE:"+min);
-					} else if (pot > max) {
+					} else if (amount > max) {
+						roundContribution += max;
 						outStream.println("RAISE:"+max);
 					} else {
-						outStream.println("RAISE:"+pot);
+						roundContribution += amount;
+						outStream.println("RAISE:"+amount);
 					}
 				}
 			}
