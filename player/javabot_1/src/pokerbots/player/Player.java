@@ -4,7 +4,10 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.io.*;
 
 
@@ -61,17 +64,6 @@ public class Player {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		ArrayList<String> list = new ArrayList<>();
-		final long startTime = System.currentTimeMillis();
-		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/build/tmp"))) {
-			String line;
-			while ((line = br.readLine()) != null) {
-				list.add(line);
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-		System.out.println("BYE " + (System.currentTimeMillis()-startTime));
 
 	}
 	
