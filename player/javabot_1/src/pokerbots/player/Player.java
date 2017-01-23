@@ -4,12 +4,7 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.io.*;
-
+import java.util.*;
 
 /**
  * Simple example pokerbot, written in Java.
@@ -28,7 +23,11 @@ public class Player {
 	private ArrayList<Card> hand;
 	private ArrayList<Card> board;
 	private HashMap<String, String> sets;
-	private HashMap<String, String> bucketer;
+	private HashMap<String, Integer> flopColex;
+	private ArrayList<Integer> flopBuckets;
+	private ArrayList<Integer> flopDiscards;
+	private ArrayList<String> turnData;
+	private ArrayList<ArrayList<Double>> riverCenters;
 	private ArrayList<String> handHistory;
 	private ArrayList<String> roundHistory;
 
@@ -37,6 +36,7 @@ public class Player {
 	private int turn = 0;
 
 	public Player(PrintWriter output, BufferedReader input) {
+		long time = System.currentTimeMillis();
 		this.outStream = output;
 		this.inStream = input;
 		sets = new HashMap<>();
@@ -54,17 +54,58 @@ public class Player {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		bucketer = new HashMap<>();
-		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/data/FlopAssignments.txt"))) {
+		flopColex = new HashMap<>();
+		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/data/FlopHands.txt"))) {
 			String line;
+			int i = 0;
 			while ((line = br.readLine()) != null) {
-				int delim = line.indexOf(' ');
-				bucketer.put(line.substring(0,delim), line.substring(delim+1));
+				flopColex.put(line, i++);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-
+		flopBuckets = new ArrayList<>();
+		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/data/FlopBucketsEncoded.txt"))) {
+			String line;
+			while ((line = br.readLine()) != null) {
+				flopBuckets.add(Integer.parseInt(line));
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		flopDiscards = new ArrayList<>();
+		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/data/FlopDiscardsEncoded.txt"))) {
+			String line;
+			while ((line = br.readLine()) != null) {
+				flopDiscards.add(Integer.parseInt(line));
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		riverCenters = new ArrayList<>();
+		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/data/RiverCenters.txt"))) {
+			String line;
+			while ((line = br.readLine()) != null) {
+				ArrayList<Double> point = new ArrayList<>();
+				String words[] = line.split("\t");
+				for (String word : words) {
+					point.add(Double.parseDouble(word));
+					riverCenters.add(point);
+				}
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		turnData = new ArrayList<>();
+		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/data/TurnDataEncoded.txt"))) {
+			String line;
+			while ((line = br.readLine()) != null) {
+				turnData.add(line);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		System.out.println("SETUP TIME " + (System.currentTimeMillis() - time));
 	}
 	
 	public void run() {
@@ -206,7 +247,15 @@ public class Player {
 		}
 	}
 
-	String determineMove() {
+	double distance(ArrayList<Double> a, ArrayList<Double> b) {
+		double total = 0;
+		for (int i = 0; i < a.size(); ++i) {
+			total += (a.get(i)-b.get(i))*(a.get(i)-b.get(i));
+		}
+		return total;
+	}
+
+	String key() {
 		ArrayList<Card> cards = new ArrayList<>();
 		for (Card c : hand) {
 			cards.add(new Card(c));
@@ -224,19 +273,68 @@ public class Player {
 		if (board.size() == 0) {
 			key += cardset;
 		} else if (board.size() == 3) {
-			key += bucketer.get(cardset);
+			key += flopBuckets.get(flopColex.get(cardset));
 		} else if (board.size() == 4) {
-
+			Card end = cards.remove(cards.size()-1);
+			translate(cards);
+			String flopkey = "";
+			for (Card c : cards) {
+				flopkey += c.toString();
+			}
+			int row = flopColex.get(flopkey);
+			int col = 3*(4*end.rank+end.suit);
+			key += turnData.get(row).charAt(col+1);
+			key += turnData.get(row).charAt(col+2);
 		} else if (board.size() == 5) {
-
+			//TODO dead
+			ArrayList<Double> distances = new ArrayList<>();
+			double eq;
+			eq = Calculator.calc(cardset.substring(0,4)+"23s,24s,25s,26s,27s,34s,35s,36s,37s,45s,46s,32o,43o,42o,54o,53o,52o,65o,64o,63o,62o,74o,73o,72o,83o,82o"
+					, cardset.substring(4), "", 1000000).getEv().get(0);
+			distances.add(eq);
+			eq = Calculator.calc(cardset.substring(0,4)+"28s,29s,2Ts,38s,39s,47s,48s,49s,75o,85o,84o,95o,94o,93o,92o,T5o,T4o,T3o,T2o,J3o,J2o"
+					, cardset.substring(4), "", 1000000).getEv().get(0);
+			distances.add(eq);
+			eq = Calculator.calc(cardset.substring(0,4)+"3Ts,4Ts,56s,57s,58s,59s,5Ts,67s,68s,69s,6Ts,78s,79s,89s,67o,68o,69o,6To,78o,79o,7To,89o,8To"
+					, cardset.substring(4), "", 1000000).getEv().get(0);
+			distances.add(eq);
+			eq = Calculator.calc(cardset.substring(0,4)+"22,J2s,J3s,J4s,J5s,J6s,Q2s,Q3s,Q4s,Q5s,K2s,J4o,J5o,J6o,J7o,Q2o,Q3o,Q4o,Q5o,Q6o,Q7o,K2o,K3o,K4o"
+					, cardset.substring(4), "", 1000000).getEv().get(0);
+			distances.add(eq);
+			eq = Calculator.calc(cardset.substring(0,4)+"6Qs,7Ts,7Js,7Qs,8Ts,8Js,8Qs,9Ts,9Js,9Qs,TJs,T9o,J8o,J9o,JTo,Q8o,Q9o,QTo,QJo"
+					, cardset.substring(4), "", 1000000).getEv().get(0);
+			distances.add(eq);
+			eq = Calculator.calc(cardset.substring(0,4)+"33,44,55,K3s,K4s,K5s,K6s,K7s,K8s,A2s,A3s,A4s,A5s,A6s,K5o,K6o,K7o,K8o,K9o,A2o,A3o,A4o,A5o,A6o,A7o,A8o"
+					, cardset.substring(4), "", 1000000).getEv().get(0);
+			distances.add(eq);
+			eq = Calculator.calc(cardset.substring(0,4)+"66,77,QTs,QJs,K9s,KTs,KJs,KQs,A7s,A8s,A9s,ATs,AJs,AQs,AKs,KTo,KJo,KQo,A9o,ATo,AJo,AQo,AKo"
+					, cardset.substring(4), "", 1000000).getEv().get(0);
+			distances.add(eq);
+			eq = Calculator.calc(cardset.substring(0,4)+"88,99,TT,JJ,QQ,KK,AA"
+					, cardset.substring(4), "", 1000000).getEv().get(0);
+			distances.add(eq);
+			double minDist = Double.POSITIVE_INFINITY;
+			int bucket = 0;
+			for (int i = 0; i < riverCenters.size(); ++i) {
+				double dist = distance(distances, riverCenters.get(i));
+				if (dist < minDist) {
+					minDist = dist;
+					bucket = i;
+				}
+			}
+			key += Integer.toString(bucket);
 		}
 		for (String s : handHistory) {
 			key += "_" + s;
 		}
+		return key;
+	}
 
+	String determineMove() {
+		String key = key();
 		String val = sets.get(key);
 		if (val != null) {
-			String words[] = sets.get(key).split(" ");
+			String words[] = val.split(" ");
 			String actions[] = words[0].split("_");
 			ArrayList<Double> probs = new ArrayList<>();
 			double total = 0;
@@ -255,7 +353,7 @@ public class Player {
 			}
 			return actions[actions.length - 1];
 		} else {
-			System.out.println("ERROR: KEY " + key + " NOT FOUND. CARDSET "+cardset);
+			System.out.println("ERROR: KEY " + key + " NOT FOUND");
 			System.out.println("ROUND HISTORY "+roundHistory);
 			System.out.println("HAND HISTORY "+roundHistory);
 			//TODO better correction; find closest state
