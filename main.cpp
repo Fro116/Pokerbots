@@ -188,6 +188,14 @@ std::string translate(std::vector<Card> bfield, std::vector<Card> hfield) {
   return board;
 }
 
+std::vector<Card> toCards(std::string cards) {
+  std::vector<Card> col;
+  for (std::size_t i = 0; i < cards.size(); i += 2) {
+    col.push_back(Card(cards.substr(i,2)));
+  }
+  return col;
+}
+
 double distance(std::vector<double> a, std::vector<double> b) {
   assert(a.size() == b.size());
   double dist = 0;
@@ -294,18 +302,32 @@ int cardNumber(std::string name) {
   return 4*r+s;
 }
 
-void encodeTurnBuckets(std::string flopHandsFile, std::string turnBucketsFile) {
+void encodeTurnBuckets(std::string flopHandsFile, std::string turnBucketsFile, std::string turnDiscardsFile) {
   std::unordered_map<std::string, int> flops;
+  std::unordered_map<std::string, std::string> turnDiscards;  
   std::vector<std::string> turnBuckets;
+  std::string empty = "------------------------------------------------------------------------------------------------------------------------------------------------------------";
   {
     std::string line;
     std::ifstream file(flopHandsFile);
     int i = 0;
     while (std::getline(file, line)) {
       flops[line] = i++;
-      turnBuckets.push_back("--------------------------------------------------------------------------------------------------------");
+      turnBuckets.push_back(empty);
     }
   }
+  std::cout << "DONE FLOPS" << std::endl;
+  {
+    std::string line;
+    std::ifstream file(turnDiscardsFile);
+    while (std::getline(file, line)) {
+      auto loc = line.find_first_of(' ');
+      std::string key = line.substr(0, loc);
+      std::string val = line.substr(loc+1);
+      turnDiscards[key] = val;
+    }
+  }
+  std::cout << "DONE TURNS" << std::endl;  
   {
     int iter = 0;
     std::string line;
@@ -313,20 +335,29 @@ void encodeTurnBuckets(std::string flopHandsFile, std::string turnBucketsFile) {
     while (std::getline(file, line)) {      
       auto loc = line.find_first_of(' ');
       std::string key = line.substr(0, loc);
+      std::string discard = turnDiscards[key];
+      std::string hand = key.substr(0,4);
+      std::string board = key.substr(4,6);
+      std::string flopkey = translate(toCards(board), toCards(hand));
+      std::size_t row = static_cast<std::size_t>(flops[flopkey]);
+      std::size_t col = static_cast<std::size_t>(3*cardNumber(key.substr(10)));      
       int bucket = std::stoi(line.substr(loc+1));
-      std::string val = std::to_string(bucket);
-      if (val.size() < 2) {
+      std::string val = std::to_string(bucket)+discard;
+      if (val.size() < 3) {
 	val = "0"+val;
       }
-      std::size_t row = static_cast<std::size_t>(flops[key.substr(0,10)]);
-      std::size_t col = static_cast<std::size_t>(2*cardNumber(key.substr(10)));
       turnBuckets[row][col] = val[0];
       turnBuckets[row][col+1] = val[1];
+      turnBuckets[row][col+2] = val[2];
       std::cerr << iter++ << std::endl;      
     }
   }
   for (std::string& str : turnBuckets) {
-    std::cout << str << std::endl;
+    if (str != empty) {
+      std::cout << str << std::endl;
+    } else {
+      std::cout << "-" << std::endl;
+    }
   }
 }
 
@@ -467,12 +498,27 @@ void computeSingleEquities(std::string handsFile) {
   free_results(res);
 }
 
+void encodeAsInteger(std::string infile) {
+  std::string line;
+  std::ifstream file(infile);  
+  while (std::getline(file, line)) {
+    if (line == "N") {
+      std::cout << 0 << std::endl;
+    } else if (line == "L") {
+      std::cout << 1 << std::endl;
+    } else if (line == "R") {
+      std::cout << 2 << std::endl;
+    }
+  }
+}
+
 int main(int argc, char* argv[]) {
+  // encodeAsInteger("../data/FlopDiscardsEncoded.txt");
   // computeEquities("../data/FlopHands.txt");  
   // computeSingleEquities("../data/TurnHands.txt");
-  chooseDiscards("../data/TurnDistances.txt","../build/TurnSingleEquities.txt","../data/TurnHands.txt");
+  // chooseDiscards("../data/TurnDistances.txt","../build/TurnSingleEquities.txt","../data/TurnHands.txt");
   // genRandomTurns(1000000);
-  // encodeTurnBuckets("../data/FlopHands.txt", "../data/TurnAssignments.txt");
+  encodeTurnBuckets("../data/FlopHands.txt", "../data/TurnAssignments.txt", "../data/TurnDiscards.txt");
   // for (int i = 0 ; i < 1300000 ; ++i) {
   //   std::cout << "1234567890123456789012345678901234567890123456789012" << std::endl;
   // }

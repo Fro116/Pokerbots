@@ -368,7 +368,6 @@ public class Player {
 
 	void makeMove(String move, ArrayList<String> possibleActions) {
 		if (move.startsWith("RAISE")) {
-			System.out.println("MOVE "+move);
 			double perc = Double.parseDouble(move.substring(5));
 			int amount = (int)(Math.round((pot*perc)/100)) + roundContribution;
 			for (String action : possibleActions) {
@@ -388,18 +387,23 @@ public class Player {
 					}
 				}
 			}
-		} else if (move.equalsIgnoreCase("BET")) {
+		} else if (move.startsWith("BET")) {
+			double perc = Double.parseDouble(move.substring(3));
+			int amount = (int)(Math.round((pot*perc)/100)) + roundContribution;
 			for (String action : possibleActions) {
 				String words[] = action.split(":");
 				if (words[0].equalsIgnoreCase("BET")) {
 					int min = Integer.parseInt(words[1]);
 					int max = Integer.parseInt(words[2]);
-					if (pot < min) {
+					if (amount < min) {
+						roundContribution += min;
 						outStream.println("BET:"+min);
-					} else if (pot > max) {
+					} else if (amount > max) {
+						roundContribution += max;
 						outStream.println("BET:"+max);
 					} else {
-						outStream.println("BET:"+pot);
+						roundContribution += amount;
+						outStream.println("BET:"+amount);
 					}
 				}
 			}
