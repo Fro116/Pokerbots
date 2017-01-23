@@ -17,8 +17,8 @@ import java.util.*;
  */
 public class Player {
 	
-	private final PrintWriter outStream;
-	private final BufferedReader inStream;
+	private PrintWriter outStream;
+	private BufferedReader inStream;
 
 	private ArrayList<Card> hand;
 	private ArrayList<Card> board;
@@ -33,12 +33,10 @@ public class Player {
 
 	private int roundContribution;
 	private int pot;
-	private int turn = 0;
+	private int turn;
+	private boolean discardState;
 
-	public Player(PrintWriter output, BufferedReader input) {
-		long time = System.currentTimeMillis();
-		this.outStream = output;
-		this.inStream = input;
+	public Player() {
 		sets = new HashMap<>();
 		try (BufferedReader br = new BufferedReader(new FileReader("results.txt"))) {
 			String line;
@@ -90,8 +88,8 @@ public class Player {
 				String words[] = line.split("\t");
 				for (String word : words) {
 					point.add(Double.parseDouble(word));
-					riverCenters.add(point);
 				}
+				riverCenters.add(point);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -105,7 +103,11 @@ public class Player {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		System.out.println("SETUP TIME " + (System.currentTimeMillis() - time));
+	}
+
+	public void init(PrintWriter output, BufferedReader input) {
+		this.outStream = output;
+		this.inStream = input;
 	}
 	
 	public void run() {
@@ -139,12 +141,7 @@ public class Player {
 						actions.add(list[index++]);
 					}
 					updateHistory(history);
-					if (numBoard != board.size()) {
-						board = newboard;
-						roundHistory.clear();
-						roundContribution = 0;
-						turn++;
-					}
+					board = newboard;
 					String move = determineMove();
 					makeMove(move, actions);
 				} else if ("REQUESTKEYVALUES".compareToIgnoreCase(type) == 0) {
@@ -165,6 +162,7 @@ public class Player {
 					board = new ArrayList<>();
 					pot = 0;
 					turn = 0;
+					discardState = false;
 				}
 			}
 		} catch (IOException e) {
@@ -218,31 +216,61 @@ public class Player {
 					if (roundHistory.size() == 0) {
 						handHistory.add("RAISE167");
 						roundHistory.add("RAISE167");
-					} else {
-						handHistory.add("RAISE100");
-						roundHistory.add("RAISE100");
+					} else if (roundHistory.size() == 1) {
+						if (roundHistory.get(0) == "RAISE167") {
+							handHistory.add("RAISE238");
+							roundHistory.add("RAISE238");
+						} else if (roundHistory.get(0) == "CALL") {
+							handHistory.add("RAISE167");
+							roundHistory.add("RAISE167");
+						}
+					}
+				} else {
+					handHistory.add("RAISE200");
+					roundHistory.add("RAISE200");
+				}
+			} else if (words[0].equalsIgnoreCase("DISCARD")) {
+				if (words.length == 4) {
+					if (hand.get(0).toString().equalsIgnoreCase(words[1])) {
+						hand.set(0, new Card(words[2], 0));
+					} else if (hand.get(1).toString().equalsIgnoreCase(words[1])) {
+						hand.set(1, new Card(words[2], 0));
 					}
 				}
-				System.out.println("UPDATING RAISE "+ handHistory);
-			} else if (words[0].equalsIgnoreCase("DISCARD")) {
-				handHistory.add("CHECK");
-				roundHistory.add("CHECK");
+				handHistory.add("DCHECK");
+				roundHistory.add("DCHECK");
+				if (roundHistory.size() == 2) {
+					discardState = false;
+				}
 			} else if (words[0].equalsIgnoreCase("POST")) {
 
 			} else if (words[0].equalsIgnoreCase("FOLD")) {
 				handHistory.add("FOLD");
 				roundHistory.add("FOLD");
 			} else if (words[0].equalsIgnoreCase("DEAL")) {
-
+				roundHistory.clear();
+				roundContribution = 0;
+				turn++;
+				if(words[1].equalsIgnoreCase("FLOP") || words[1].equalsIgnoreCase("TURN")) {
+					discardState = true;
+				}
 			} else if (words[0].equalsIgnoreCase("CHECK")) {
-				handHistory.add("CHECK");
-				roundHistory.add("CHECK");
+				if (discardState) {
+					handHistory.add("DCHECK");
+					roundHistory.add("DCHECK");
+					if (roundHistory.size() == 2) {
+						discardState = false;
+					}
+				} else {
+					handHistory.add("CHECK");
+					roundHistory.add("CHECK");
+				}
 			} else if (words[0].equalsIgnoreCase("CALL")) {
 				handHistory.add("CALL");
 				roundHistory.add("CALL");
 			} else if (words[0].equalsIgnoreCase("BET")) {
-				handHistory.add("BET");
-				roundHistory.add("BET");
+				handHistory.add("BET066");
+				roundHistory.add("BET066");
 			}
 		}
 	}
@@ -283,34 +311,36 @@ public class Player {
 			}
 			int row = flopColex.get(flopkey);
 			int col = 3*(4*end.rank+end.suit);
+			if (turnData.get(row).charAt(col) != '0') {
+				key += turnData.get(row).charAt(col);
+			}
 			key += turnData.get(row).charAt(col+1);
-			key += turnData.get(row).charAt(col+2);
 		} else if (board.size() == 5) {
 			//TODO dead
 			ArrayList<Double> distances = new ArrayList<>();
 			double eq;
-			eq = Calculator.calc(cardset.substring(0,4)+"23s,24s,25s,26s,27s,34s,35s,36s,37s,45s,46s,32o,43o,42o,54o,53o,52o,65o,64o,63o,62o,74o,73o,72o,83o,82o"
+			eq = Calculator.calc(cardset.substring(0,4)+":23s,24s,25s,26s,27s,34s,35s,36s,37s,45s,46s,32o,43o,42o,54o,53o,52o,65o,64o,63o,62o,74o,73o,72o,83o,82o"
 					, cardset.substring(4), "", 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+"28s,29s,2Ts,38s,39s,47s,48s,49s,75o,85o,84o,95o,94o,93o,92o,T5o,T4o,T3o,T2o,J3o,J2o"
+			eq = Calculator.calc(cardset.substring(0,4)+":28s,29s,2Ts,38s,39s,47s,48s,49s,75o,85o,84o,95o,94o,93o,92o,T5o,T4o,T3o,T2o,J3o,J2o"
 					, cardset.substring(4), "", 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+"3Ts,4Ts,56s,57s,58s,59s,5Ts,67s,68s,69s,6Ts,78s,79s,89s,67o,68o,69o,6To,78o,79o,7To,89o,8To"
+			eq = Calculator.calc(cardset.substring(0,4)+":3Ts,4Ts,56s,57s,58s,59s,5Ts,67s,68s,69s,6Ts,78s,79s,89s,67o,68o,69o,6To,78o,79o,7To,89o,8To"
 					, cardset.substring(4), "", 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+"22,J2s,J3s,J4s,J5s,J6s,Q2s,Q3s,Q4s,Q5s,K2s,J4o,J5o,J6o,J7o,Q2o,Q3o,Q4o,Q5o,Q6o,Q7o,K2o,K3o,K4o"
+			eq = Calculator.calc(cardset.substring(0,4)+":22,J2s,J3s,J4s,J5s,J6s,Q2s,Q3s,Q4s,Q5s,K2s,J4o,J5o,J6o,J7o,Q2o,Q3o,Q4o,Q5o,Q6o,Q7o,K2o,K3o,K4o"
 					, cardset.substring(4), "", 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+"6Qs,7Ts,7Js,7Qs,8Ts,8Js,8Qs,9Ts,9Js,9Qs,TJs,T9o,J8o,J9o,JTo,Q8o,Q9o,QTo,QJo"
+			eq = Calculator.calc(cardset.substring(0,4)+":6Qs,7Ts,7Js,7Qs,8Ts,8Js,8Qs,9Ts,9Js,9Qs,TJs,T9o,J8o,J9o,JTo,Q8o,Q9o,QTo,QJo"
 					, cardset.substring(4), "", 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+"33,44,55,K3s,K4s,K5s,K6s,K7s,K8s,A2s,A3s,A4s,A5s,A6s,K5o,K6o,K7o,K8o,K9o,A2o,A3o,A4o,A5o,A6o,A7o,A8o"
+			eq = Calculator.calc(cardset.substring(0,4)+":33,44,55,K3s,K4s,K5s,K6s,K7s,K8s,A2s,A3s,A4s,A5s,A6s,K5o,K6o,K7o,K8o,K9o,A2o,A3o,A4o,A5o,A6o,A7o,A8o"
 					, cardset.substring(4), "", 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+"66,77,QTs,QJs,K9s,KTs,KJs,KQs,A7s,A8s,A9s,ATs,AJs,AQs,AKs,KTo,KJo,KQo,A9o,ATo,AJo,AQo,AKo"
+			eq = Calculator.calc(cardset.substring(0,4)+":66,77,QTs,QJs,K9s,KTs,KJs,KQs,A7s,A8s,A9s,ATs,AJs,AQs,AKs,KTo,KJo,KQo,A9o,ATo,AJo,AQo,AKo"
 					, cardset.substring(4), "", 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+"88,99,TT,JJ,QQ,KK,AA"
+			eq = Calculator.calc(cardset.substring(0,4)+":88,99,TT,JJ,QQ,KK,AA"
 					, cardset.substring(4), "", 1000000).getEv().get(0);
 			distances.add(eq);
 			double minDist = Double.POSITIVE_INFINITY;
@@ -356,12 +386,12 @@ public class Player {
 			System.out.println("ERROR: KEY " + key + " NOT FOUND");
 			System.out.println("ROUND HISTORY "+roundHistory);
 			System.out.println("HAND HISTORY "+roundHistory);
-			//TODO better correction; find closest state
-			if (roundHistory.get(roundHistory.size()-1).startsWith("RAISE")) {
-				roundHistory.remove(roundHistory.size()-1);
-				handHistory.remove(handHistory.size()-1);
-				return determineMove();
-			}
+//			//TODO better correction; find closest state
+//			if (roundHistory.get(roundHistory.size()-1).startsWith("RAISE")) {
+//				roundHistory.remove(roundHistory.size()-1);
+//				handHistory.remove(handHistory.size()-1);
+//				return determineMove();
+//			}
 			return "ERROR";
 		}
 	}
@@ -378,12 +408,15 @@ public class Player {
 					if (amount < min) {
 						roundContribution += min;
 						outStream.println("RAISE:"+min);
+						return;
 					} else if (amount > max) {
 						roundContribution += max;
 						outStream.println("RAISE:"+max);
+						return;
 					} else {
 						roundContribution += amount;
 						outStream.println("RAISE:"+amount);
+						return;
 					}
 				}
 			}
@@ -398,31 +431,93 @@ public class Player {
 					if (amount < min) {
 						roundContribution += min;
 						outStream.println("BET:"+min);
+						return;
 					} else if (amount > max) {
 						roundContribution += max;
 						outStream.println("BET:"+max);
+						return;
 					} else {
 						roundContribution += amount;
 						outStream.println("BET:"+amount);
+						return;
 					}
 				}
 			}
 		}
 		else if (move.equalsIgnoreCase("CALL")) {
 			outStream.println("CALL");
+			return;
 		} else if (move.equalsIgnoreCase("FOLD")) {
 			outStream.println("FOLD");
+			return;
 		} else if (move.equalsIgnoreCase("CHECK")) {
 			outStream.println("CHECK");
-		} else {
-			for(String action : possibleActions) {
-				if (action.compareToIgnoreCase("CHECK") == 0) {
-					outStream.println("CHECK");
-				} else if (action.compareToIgnoreCase("CALL") == 0){
-					outStream.println("CALL");
+			return;
+		} else if (move.equalsIgnoreCase("DCHECK")) {
+			int discard = 0;
+			ArrayList<Card> cards = new ArrayList<>();
+			if (turn == 1) {
+				for (Card c : hand) {
+					cards.add(new Card(c));
 				}
+				for (Card c : board) {
+					cards.add(new Card(c));
+				}
+				translate(cards);
+				String cardset = "";
+				for (Card c : cards) {
+					cardset += c.toString();
+				}
+				discard = flopDiscards.get(flopColex.get(cardset));
+				System.out.println("DISCARD "+cardset+ " "+discard+" "+flopColex.get(cardset));
+			} else if (turn == 2) {
+				for (Card c : hand) {
+					cards.add(new Card(c));
+				}
+				for (Card c : board) {
+					cards.add(new Card(c));
+				}
+				translate(cards);
+				Card end = cards.remove(cards.size()-1);
+				translate(cards);
+				String flopkey = "";
+				for (Card c : cards) {
+					flopkey += c.toString();
+				}
+				int row = flopColex.get(flopkey);
+				int col = 3*(4*end.rank+end.suit);
+				char val = turnData.get(row).charAt(col+1);
+				if (val == 'N') {
+					discard = 0;
+				} else if (val == 'L') {
+					discard = 1;
+				} else if (val == 'R') {
+					discard = 2;
+				}
+				System.out.println("DISCARD "+flopkey+ " "+discard);
 			}
-			System.out.println("ERROR: ATTEMPING TO DO MOVE "+move);
+			if (discard == 0) {
+				outStream.println("CHECK");
+			} else if (discard == 1) {
+				outStream.println("DISCARD:"+cards.get(0).toString());
+			} else if (discard == 2) {
+				outStream.println("DISCARD:"+cards.get(1).toString());
+			}
+			return;
+		}
+//			for(String action : possibleActions) {
+//				if (action.compareToIgnoreCase("DISCARD") == 0) {
+//					makeMove("DCHECK", possibleActions);
+//					return;
+//				}
+//			}
+		System.out.println("ERROR: ATTEMPING TO DO MOVE "+move);
+		for(String action : possibleActions) {
+			if (action.compareToIgnoreCase("CHECK") == 0) {
+				outStream.println("CHECK");
+			} else if (action.compareToIgnoreCase("CALL") == 0){
+				outStream.println("CALL");
+			}
 		}
 	}
 	
