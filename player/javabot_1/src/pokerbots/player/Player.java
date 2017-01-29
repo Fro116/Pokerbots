@@ -1,9 +1,6 @@
 package pokerbots.player;
 
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import java.io.PrintWriter;
+import java.io.*;
 import java.util.*;
 
 /**
@@ -17,11 +14,12 @@ import java.util.*;
  */
 public class Player {
 	
-	private PrintWriter outStream;
-	private BufferedReader inStream;
+	private final PrintWriter outStream;
+	private final BufferedReader inStream;
 
 	private ArrayList<Card> hand;
 	private ArrayList<Card> board;
+	private ArrayList<Card> dead;
 	private HashMap<String, String> sets;
 	private HashMap<String, Integer> flopColex;
 	private ArrayList<Integer> flopBuckets;
@@ -31,14 +29,30 @@ public class Player {
 	private ArrayList<String> handHistory;
 	private ArrayList<String> roundHistory;
 
-	private int roundContribution;
 	private int pot;
 	private int turn;
 	private boolean discardState;
+	private String ourName;
+	private String oppName;
+	private int ourTotalContribution;
+	private int oppTotalContribution;
+	private int ourRoundContribution;
+	private int oppRoundContribution;
+	private boolean fakeCheck = false;
+	private boolean fakeCall = false;
 
-	public Player() {
+	private int startingStack = 200;
+
+	public Player(PrintWriter output, BufferedReader input) {
+		this.outStream = output;
+		this.inStream = input;
+		init();
+	}
+
+
+	public void init() {
 		sets = new HashMap<>();
-		try (BufferedReader br = new BufferedReader(new FileReader("results.txt"))) {
+		try (BufferedReader br = new BufferedReader(new FileReader("data/results.txt"))) {
 			String line;
 			while ((line = br.readLine()) != null) {
 				int delim = line.indexOf(':');
@@ -53,7 +67,7 @@ public class Player {
 			e.printStackTrace();
 		}
 		flopColex = new HashMap<>();
-		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/data/FlopHands.txt"))) {
+		try (BufferedReader br = new BufferedReader(new FileReader("data/FlopHands.txt"))) {
 			String line;
 			int i = 0;
 			while ((line = br.readLine()) != null) {
@@ -63,7 +77,7 @@ public class Player {
 			e.printStackTrace();
 		}
 		flopBuckets = new ArrayList<>();
-		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/data/FlopBucketsEncoded.txt"))) {
+		try (BufferedReader br = new BufferedReader(new FileReader("data/FlopBucketsEncoded.txt"))) {
 			String line;
 			while ((line = br.readLine()) != null) {
 				flopBuckets.add(Integer.parseInt(line));
@@ -72,7 +86,7 @@ public class Player {
 			e.printStackTrace();
 		}
 		flopDiscards = new ArrayList<>();
-		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/data/FlopDiscardsEncoded.txt"))) {
+		try (BufferedReader br = new BufferedReader(new FileReader("data/FlopDiscardsEncoded.txt"))) {
 			String line;
 			while ((line = br.readLine()) != null) {
 				flopDiscards.add(Integer.parseInt(line));
@@ -81,7 +95,7 @@ public class Player {
 			e.printStackTrace();
 		}
 		riverCenters = new ArrayList<>();
-		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/data/RiverCenters.txt"))) {
+		try (BufferedReader br = new BufferedReader(new FileReader("data/RiverCenters.txt"))) {
 			String line;
 			while ((line = br.readLine()) != null) {
 				ArrayList<Double> point = new ArrayList<>();
@@ -95,7 +109,7 @@ public class Player {
 			e.printStackTrace();
 		}
 		turnData = new ArrayList<>();
-		try (BufferedReader br = new BufferedReader(new FileReader("/Users/kundanc/Coding/pokerbots/data/TurnDataEncoded.txt"))) {
+		try (BufferedReader br = new BufferedReader(new FileReader("data/TurnDataEncoded.txt"))) {
 			String line;
 			while ((line = br.readLine()) != null) {
 				turnData.add(line);
@@ -105,11 +119,7 @@ public class Player {
 		}
 	}
 
-	public void init(PrintWriter output, BufferedReader input) {
-		this.outStream = output;
-		this.inStream = input;
-	}
-	
+
 	public void run() {
 		String input;
 		try {
@@ -120,7 +130,7 @@ public class Player {
 				// from the engine and act on it.
 				System.out.println(input);
 				String[] list = input.split(" ");
-				
+
 				String type = list[0];
 				if ("GETACTION".compareToIgnoreCase(type) == 0) {
 					int index = 1;
@@ -141,9 +151,14 @@ public class Player {
 						actions.add(list[index++]);
 					}
 					updateHistory(history);
+					System.out.println(key() + " "+history);
 					board = newboard;
 					String move = determineMove();
-					makeMove(move, actions);
+					System.out.println("PREPROCESSED MOVE "+move);
+					move = processMove(move);
+					System.out.println("PROCESSED MOVE "+move);
+					String action = makeMove(move, actions);
+					outStream.println(action);
 				} else if ("REQUESTKEYVALUES".compareToIgnoreCase(type) == 0) {
 					// At the end, engine will allow bot to send key/value pairs to store.
 					// FINISH indicates no more to store.
@@ -153,16 +168,28 @@ public class Player {
 					hand.add(new Card(list[3], 0));
 					hand.add(new Card(list[4], 0));
 					if (list[2] == "true") {
-						roundContribution = 1;
+						ourRoundContribution = 1;
+						ourTotalContribution = 1;
+						oppRoundContribution = 2;
+						oppTotalContribution = 2;
 					} else {
-						roundContribution = 2;
+						ourRoundContribution = 2;
+						ourTotalContribution = 2;
+						oppRoundContribution = 1;
+						oppTotalContribution = 1;
 					}
 					handHistory = new ArrayList<>();
 					roundHistory = new ArrayList<>();
 					board = new ArrayList<>();
-					pot = 0;
+					dead = new ArrayList<>();
+					pot = 3;
 					turn = 0;
 					discardState = false;
+					fakeCheck = false;
+					fakeCall = false;
+				} else if ("NEWGAME".compareToIgnoreCase(type) == 0) {
+					ourName = list[1];
+					oppName = list[2];
 				}
 			}
 		} catch (IOException e) {
@@ -170,7 +197,7 @@ public class Player {
 		}
 
 		System.out.println("Gameover, engine disconnected");
-		
+
 		// Once the server disconnects from us, close our streams and sockets.
 		try {
 			outStream.close();
@@ -212,36 +239,62 @@ public class Player {
 			} else if (words[0].equalsIgnoreCase("REFUND")) {
 
 			} else if (words[0].equalsIgnoreCase("RAISE")) {
-				if (turn == 0) {
-					if (roundHistory.size() == 0) {
-						handHistory.add("RAISE167");
-						roundHistory.add("RAISE167");
-					} else if (roundHistory.size() == 1) {
-						if (roundHistory.get(0) == "RAISE167") {
-							handHistory.add("RAISE238");
-							roundHistory.add("RAISE238");
-						} else if (roundHistory.get(0) == "CALL") {
-							handHistory.add("RAISE167");
-							roundHistory.add("RAISE167");
+				int amount = Integer.parseInt(words[1]);
+				int lastpot = ourTotalContribution + oppTotalContribution;
+				double perc = 0;
+				if (words[2].equalsIgnoreCase(ourName)) {
+					perc = (double) (amount-ourRoundContribution) / (double) lastpot * 100;
+				} else {
+					perc = (double) (amount-oppRoundContribution) / (double) lastpot * 100;
+				}
+				if (perc <= 200) {
+					double a = 0;
+					double b = 200;
+					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
+					if (Math.random() < f) {
+						fakeCall = true;
+						interpretCall();
+					} else {
+						if (fakeCheck) {
+							interpretBet();
+							fakeCheck = false;
+						} else {
+							interpretRaise();
 						}
 					}
 				} else {
-					handHistory.add("RAISE200");
-					roundHistory.add("RAISE200");
+					double a = 200;
+					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot * 100;
+					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
+					if (Math.random() < f) {
+						if (fakeCheck) {
+							interpretBet();
+							fakeCheck = false;
+						} else {
+							interpretRaise();
+						}
+					} else {
+						interpretAllin(false);
+					}
+				}
+				if (words[2].equalsIgnoreCase(ourName)) {
+					ourTotalContribution += amount - ourRoundContribution;
+					ourRoundContribution = amount;
+				} else {
+					oppTotalContribution += amount - oppRoundContribution;
+					oppRoundContribution = amount;
 				}
 			} else if (words[0].equalsIgnoreCase("DISCARD")) {
 				if (words.length == 4) {
 					if (hand.get(0).toString().equalsIgnoreCase(words[1])) {
+						dead.add(new Card(hand.get(0)));
 						hand.set(0, new Card(words[2], 0));
 					} else if (hand.get(1).toString().equalsIgnoreCase(words[1])) {
+						dead.add(new Card(hand.get(1)));
 						hand.set(1, new Card(words[2], 0));
 					}
 				}
-				handHistory.add("DCHECK");
-				roundHistory.add("DCHECK");
-				if (roundHistory.size() == 2) {
-					discardState = false;
-				}
+				interpretDcheck();
 			} else if (words[0].equalsIgnoreCase("POST")) {
 
 			} else if (words[0].equalsIgnoreCase("FOLD")) {
@@ -249,29 +302,133 @@ public class Player {
 				roundHistory.add("FOLD");
 			} else if (words[0].equalsIgnoreCase("DEAL")) {
 				roundHistory.clear();
-				roundContribution = 0;
+				ourRoundContribution = 0;
+				oppRoundContribution = 0;
 				turn++;
 				if(words[1].equalsIgnoreCase("FLOP") || words[1].equalsIgnoreCase("TURN")) {
 					discardState = true;
 				}
 			} else if (words[0].equalsIgnoreCase("CHECK")) {
 				if (discardState) {
-					handHistory.add("DCHECK");
-					roundHistory.add("DCHECK");
-					if (roundHistory.size() == 2) {
-						discardState = false;
-					}
+					interpretDcheck();
 				} else {
-					handHistory.add("CHECK");
-					roundHistory.add("CHECK");
+					interpretCheck();
 				}
 			} else if (words[0].equalsIgnoreCase("CALL")) {
-				handHistory.add("CALL");
-				roundHistory.add("CALL");
+				int amount = Math.max(ourRoundContribution, oppRoundContribution);
+				ourTotalContribution += amount - ourRoundContribution;
+				oppTotalContribution += amount - oppRoundContribution;
+				ourRoundContribution = amount;
+				oppRoundContribution = amount;
+				if (fakeCheck) {
+					interpretCheck();
+					fakeCheck = false;
+				}
+				if (fakeCall) {
+					fakeCall = false;
+				} else {
+					interpretCall();
+				}
 			} else if (words[0].equalsIgnoreCase("BET")) {
-				handHistory.add("BET066");
-				roundHistory.add("BET066");
+				int amount = Integer.parseInt(words[1]);
+				int lastpot = ourTotalContribution + oppTotalContribution;
+				double perc = 0;
+				if (words[2].equalsIgnoreCase(ourName)) {
+					perc = (double) (amount-ourRoundContribution) / (double) lastpot * 100;
+				} else {
+					perc = (double) (amount-oppRoundContribution) / (double) lastpot * 100;
+				}
+				if (perc <= 66) {
+					double a = 0;
+					double b = 66;
+					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
+					if (Math.random() < f) {
+						fakeCheck = true;
+						interpretCheck();
+					} else {
+						interpretBet();
+					}
+				} else {
+					double a = 66;
+					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot * 100;
+					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
+					if (Math.random() < f) {
+						interpretBet();
+					} else {
+						interpretAllin(true);
+					}
+				}
+
+				if (words[2].equalsIgnoreCase(ourName)) {
+					ourTotalContribution += amount - ourRoundContribution;
+					ourRoundContribution = amount;
+				} else {
+					oppTotalContribution += amount - oppRoundContribution;
+					oppRoundContribution = amount;
+				}
 			}
+		}
+	}
+
+	void interpretRaise() {
+		if (turn == 0) {
+			if (roundHistory.size() == 0) {
+				handHistory.add("RAISE167");
+				roundHistory.add("RAISE167");
+			} else if (roundHistory.size() == 1) {
+				if (roundHistory.get(0) == "RAISE167") {
+					handHistory.add("RAISE238");
+					roundHistory.add("RAISE238");
+				} else if (roundHistory.get(0) == "CALL") {
+					handHistory.add("RAISE167");
+					roundHistory.add("RAISE167");
+				}
+			}
+		} else {
+			handHistory.add("RAISE200");
+			roundHistory.add("RAISE200");
+		}
+	}
+
+	void interpretBet() {
+		handHistory.add("BET066");
+		roundHistory.add("BET066");
+	}
+
+	void interpretCall() {
+		handHistory.add("CALL");
+		roundHistory.add("CALL");
+	}
+
+	void interpretCheck() {
+		handHistory.add("CHECK");
+		roundHistory.add("CHECK");
+	}
+
+	void interpretDcheck() {
+		handHistory.add("DCHECK");
+		roundHistory.add("DCHECK");
+		if (roundHistory.size() == 2) {
+			discardState = false;
+		}
+	}
+
+	void interpretAllin(boolean bet) {
+		if (turn == 0) {
+			handHistory.clear();
+			roundHistory.clear();
+		} else {
+			while (!handHistory.get(handHistory.size()-1).equals("DCHECK")) {
+				handHistory.remove(handHistory.size() - 1);
+				roundHistory.clear();
+			}
+		}
+		if (bet) {
+			handHistory.add("RAISE99999");
+			roundHistory.add("RAISE99999");
+		} else {
+			handHistory.add("RAISE99999");
+			roundHistory.add("RAISE99999");
 		}
 	}
 
@@ -316,32 +473,43 @@ public class Player {
 			}
 			key += turnData.get(row).charAt(col+1);
 		} else if (board.size() == 5) {
-			//TODO dead
+			String deadcards = "";
+			for (Card c : dead) {
+				deadcards += c.toString();
+			}
+			String handcards = "";
+			for (Card c : hand) {
+				handcards += c.toString();
+			}
+			String boardcards = "";
+			for (Card c : board) {
+				boardcards += c.toString();
+			}
 			ArrayList<Double> distances = new ArrayList<>();
 			double eq;
-			eq = Calculator.calc(cardset.substring(0,4)+":23s,24s,25s,26s,27s,34s,35s,36s,37s,45s,46s,32o,43o,42o,54o,53o,52o,65o,64o,63o,62o,74o,73o,72o,83o,82o"
-					, cardset.substring(4), "", 1000000).getEv().get(0);
+			eq = Calculator.calc(handcards+":23s,24s,25s,26s,27s,34s,35s,36s,37s,45s,46s,32o,43o,42o,54o,53o,52o,65o,64o,63o,62o,74o,73o,72o,83o,82o"
+					, boardcards, deadcards, 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+":28s,29s,2Ts,38s,39s,47s,48s,49s,75o,85o,84o,95o,94o,93o,92o,T5o,T4o,T3o,T2o,J3o,J2o"
-					, cardset.substring(4), "", 1000000).getEv().get(0);
+			eq = Calculator.calc(handcards+":28s,29s,2Ts,38s,39s,47s,48s,49s,75o,85o,84o,95o,94o,93o,92o,T5o,T4o,T3o,T2o,J3o,J2o"
+					, boardcards, deadcards, 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+":3Ts,4Ts,56s,57s,58s,59s,5Ts,67s,68s,69s,6Ts,78s,79s,89s,67o,68o,69o,6To,78o,79o,7To,89o,8To"
-					, cardset.substring(4), "", 1000000).getEv().get(0);
+			eq = Calculator.calc(handcards+":3Ts,4Ts,56s,57s,58s,59s,5Ts,67s,68s,69s,6Ts,78s,79s,89s,67o,68o,69o,6To,78o,79o,7To,89o,8To"
+					, boardcards, deadcards, 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+":22,J2s,J3s,J4s,J5s,J6s,Q2s,Q3s,Q4s,Q5s,K2s,J4o,J5o,J6o,J7o,Q2o,Q3o,Q4o,Q5o,Q6o,Q7o,K2o,K3o,K4o"
-					, cardset.substring(4), "", 1000000).getEv().get(0);
+			eq = Calculator.calc(handcards+":22,J2s,J3s,J4s,J5s,J6s,Q2s,Q3s,Q4s,Q5s,K2s,J4o,J5o,J6o,J7o,Q2o,Q3o,Q4o,Q5o,Q6o,Q7o,K2o,K3o,K4o"
+					, boardcards, deadcards, 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+":6Qs,7Ts,7Js,7Qs,8Ts,8Js,8Qs,9Ts,9Js,9Qs,TJs,T9o,J8o,J9o,JTo,Q8o,Q9o,QTo,QJo"
-					, cardset.substring(4), "", 1000000).getEv().get(0);
+			eq = Calculator.calc(handcards+":6Qs,7Ts,7Js,7Qs,8Ts,8Js,8Qs,9Ts,9Js,9Qs,TJs,T9o,J8o,J9o,JTo,Q8o,Q9o,QTo,QJo"
+					, boardcards, deadcards, 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+":33,44,55,K3s,K4s,K5s,K6s,K7s,K8s,A2s,A3s,A4s,A5s,A6s,K5o,K6o,K7o,K8o,K9o,A2o,A3o,A4o,A5o,A6o,A7o,A8o"
-					, cardset.substring(4), "", 1000000).getEv().get(0);
+			eq = Calculator.calc(handcards+":33,44,55,K3s,K4s,K5s,K6s,K7s,K8s,A2s,A3s,A4s,A5s,A6s,K5o,K6o,K7o,K8o,K9o,A2o,A3o,A4o,A5o,A6o,A7o,A8o"
+					, boardcards, deadcards, 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+":66,77,QTs,QJs,K9s,KTs,KJs,KQs,A7s,A8s,A9s,ATs,AJs,AQs,AKs,KTo,KJo,KQo,A9o,ATo,AJo,AQo,AKo"
-					, cardset.substring(4), "", 1000000).getEv().get(0);
+			eq = Calculator.calc(handcards+":66,77,QTs,QJs,K9s,KTs,KJs,KQs,A7s,A8s,A9s,ATs,AJs,AQs,AKs,KTo,KJo,KQo,A9o,ATo,AJo,AQo,AKo"
+					, boardcards, deadcards, 1000000).getEv().get(0);
 			distances.add(eq);
-			eq = Calculator.calc(cardset.substring(0,4)+":88,99,TT,JJ,QQ,KK,AA"
-					, cardset.substring(4), "", 1000000).getEv().get(0);
+			eq = Calculator.calc(handcards+":88,99,TT,JJ,QQ,KK,AA"
+					, boardcards, deadcards, 1000000).getEv().get(0);
 			distances.add(eq);
 			double minDist = Double.POSITIVE_INFINITY;
 			int bucket = 0;
@@ -396,131 +564,137 @@ public class Player {
 		}
 	}
 
-	void makeMove(String move, ArrayList<String> possibleActions) {
+	String processMove(String move) {
+		if (fakeCheck) {
+			if (move.startsWith("BET")) {
+				move = "RAISE"+move.substring(5);
+			} else if (move.equalsIgnoreCase("CHECK")) {
+				move = "CALL";
+			}
+		}
+		if (fakeCall) {
+			move = "CALL";
+		}
+		if (move.equalsIgnoreCase("CALL")) {
+			if (handHistory.size() > 0 && handHistory.get(handHistory.size()-1).equalsIgnoreCase("RAISE99999")) {
+				move = "RAISE99999";
+			}
+		}
+		return move;
+	}
+
+	String makeMove(String move, ArrayList<String> possibleActions) {
 		if (move.startsWith("RAISE")) {
 			double perc = Double.parseDouble(move.substring(5));
-			int amount = (int)(Math.round((pot*perc)/100)) + roundContribution;
+			int amount = (int) (Math.round((pot * perc) / 100)) + ourRoundContribution;
 			for (String action : possibleActions) {
 				String words[] = action.split(":");
 				if (words[0].equalsIgnoreCase("RAISE")) {
 					int min = Integer.parseInt(words[1]);
 					int max = Integer.parseInt(words[2]);
 					if (amount < min) {
-						roundContribution += min;
-						outStream.println("RAISE:"+min);
-						return;
+						return "RAISE:" + min;
 					} else if (amount > max) {
-						roundContribution += max;
-						outStream.println("RAISE:"+max);
-						return;
+						return "RAISE:" + max;
 					} else {
-						roundContribution += amount;
-						outStream.println("RAISE:"+amount);
-						return;
+						return "RAISE:" + amount;
 					}
 				}
 			}
 		} else if (move.startsWith("BET")) {
 			double perc = Double.parseDouble(move.substring(3));
-			int amount = (int)(Math.round((pot*perc)/100)) + roundContribution;
+			int amount = (int) (Math.round((pot * perc) / 100)) + ourRoundContribution;
 			for (String action : possibleActions) {
 				String words[] = action.split(":");
 				if (words[0].equalsIgnoreCase("BET")) {
 					int min = Integer.parseInt(words[1]);
 					int max = Integer.parseInt(words[2]);
 					if (amount < min) {
-						roundContribution += min;
-						outStream.println("BET:"+min);
-						return;
+						return "BET:" + min;
 					} else if (amount > max) {
-						roundContribution += max;
-						outStream.println("BET:"+max);
-						return;
+						return "BET:" + max;
 					} else {
-						roundContribution += amount;
-						outStream.println("BET:"+amount);
-						return;
+						return "BET:" + amount;
+					}
+				}
+			}
+		} else if (move.equalsIgnoreCase("CALL")) {
+			return "CALL";
+		} else if (move.equalsIgnoreCase("FOLD")) {
+			return "FOLD";
+		} else if (move.equalsIgnoreCase("CHECK")) {
+			return "CHECK";
+		} else if (move.equalsIgnoreCase("DCHECK")) {
+			for (String action : possibleActions) {
+				if (action.startsWith("DISCARD")) {
+					int discard = 0;
+					ArrayList<Card> cards = new ArrayList<>();
+					for (Card c : hand) {
+						cards.add(new Card(c));
+					}
+					for (Card c : board) {
+						cards.add(new Card(c));
+					}
+					translate(cards);
+					if (turn == 1) {
+						String cardset = "";
+						for (Card c : cards) {
+							cardset += c.toString();
+						}
+						discard = flopDiscards.get(flopColex.get(cardset));
+					} else if (turn == 2) {
+						Card end = cards.remove(cards.size()-1);
+						translate(cards);
+						String flopkey = "";
+						for (Card c : cards) {
+							flopkey += c.toString();
+						}
+						int row = flopColex.get(flopkey);
+						int col = 3*(4*end.rank+end.suit);
+						char val = turnData.get(row).charAt(col + 2);
+						if (val == 'N') {
+							discard = 0;
+						} else if (val == 'L') {
+							discard = 1;
+						} else if (val == 'R') {
+							discard = 2;
+						}
+					}
+					if (discard == 0) {
+						return "CHECK";
+					} else if (discard == 1) {
+						ArrayList<Card> copy = new ArrayList<>();
+						for (Card c : hand) {
+							copy.add(new Card(c));
+						}
+						Collections.sort(copy, new RankComparator());
+						return "DISCARD:" + copy.get(0).toString();
+					} else if (discard == 2) {
+						ArrayList<Card> copy = new ArrayList<>();
+						for (Card c : hand) {
+							copy.add(new Card(c));
+						}
+						Collections.sort(copy, new RankComparator());
+						return "DISCARD:" + copy.get(1).toString();
 					}
 				}
 			}
 		}
-		else if (move.equalsIgnoreCase("CALL")) {
-			outStream.println("CALL");
-			return;
-		} else if (move.equalsIgnoreCase("FOLD")) {
-			outStream.println("FOLD");
-			return;
-		} else if (move.equalsIgnoreCase("CHECK")) {
-			outStream.println("CHECK");
-			return;
-		} else if (move.equalsIgnoreCase("DCHECK")) {
-			int discard = 0;
-			ArrayList<Card> cards = new ArrayList<>();
-			if (turn == 1) {
-				for (Card c : hand) {
-					cards.add(new Card(c));
-				}
-				for (Card c : board) {
-					cards.add(new Card(c));
-				}
-				translate(cards);
-				String cardset = "";
-				for (Card c : cards) {
-					cardset += c.toString();
-				}
-				discard = flopDiscards.get(flopColex.get(cardset));
-				System.out.println("DISCARD "+cardset+ " "+discard+" "+flopColex.get(cardset));
-			} else if (turn == 2) {
-				for (Card c : hand) {
-					cards.add(new Card(c));
-				}
-				for (Card c : board) {
-					cards.add(new Card(c));
-				}
-				translate(cards);
-				Card end = cards.remove(cards.size()-1);
-				translate(cards);
-				String flopkey = "";
-				for (Card c : cards) {
-					flopkey += c.toString();
-				}
-				int row = flopColex.get(flopkey);
-				int col = 3*(4*end.rank+end.suit);
-				char val = turnData.get(row).charAt(col+1);
-				if (val == 'N') {
-					discard = 0;
-				} else if (val == 'L') {
-					discard = 1;
-				} else if (val == 'R') {
-					discard = 2;
-				}
-				System.out.println("DISCARD "+flopkey+ " "+discard);
+		for (String action : possibleActions) {
+			if (action.startsWith("DISCARD")) {
+				return makeMove("DCHECK", possibleActions);
 			}
-			if (discard == 0) {
-				outStream.println("CHECK");
-			} else if (discard == 1) {
-				outStream.println("DISCARD:"+cards.get(0).toString());
-			} else if (discard == 2) {
-				outStream.println("DISCARD:"+cards.get(1).toString());
-			}
-			return;
 		}
-//			for(String action : possibleActions) {
-//				if (action.compareToIgnoreCase("DISCARD") == 0) {
-//					makeMove("DCHECK", possibleActions);
-//					return;
-//				}
-//			}
-		System.out.println("ERROR: ATTEMPING TO DO MOVE "+move);
-		for(String action : possibleActions) {
+		System.out.println("ERROR: ATTEMPING TO DO MOVE " + move);
+		for (String action : possibleActions) {
 			if (action.compareToIgnoreCase("CHECK") == 0) {
-				outStream.println("CHECK");
-			} else if (action.compareToIgnoreCase("CALL") == 0){
-				outStream.println("CALL");
+				return "CHECK";
+			} else if (action.compareToIgnoreCase("CALL") == 0) {
+				return "CALL";
 			}
 		}
+		return "CHECK";
 	}
-	
 }
 
 class RankComparator implements Comparator<Card> {

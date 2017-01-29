@@ -256,10 +256,8 @@ void computeDistances(std::string handsFile) {
   Results* res = alloc_results();
   std::string dead = "";
   while (std::getline(file, line)) {
-    std::vector<std::string> words;
-    boost::split(words, line, boost::is_any_of(" "));
-    std::string hand = words[0]+words[1];
-    std::string board = words[2]+words[3]+words[4]+words[5]+words[6];
+    std::string hand = line.substr(0,4);
+    std::string board = line.substr(4);
     std::cout << hand << board;
     calc(const_cast<char*>((hand+":"+"23s,24s,25s,26s,27s,34s,35s,36s,37s,45s,46s,32o,43o,42o,54o,53o,52o,65o,64o,63o,62o,74o,73o,72o,83o,82o").c_str()), const_cast<char*>(board.c_str()), const_cast<char*>(dead.c_str()), 1000000, res);
     std::cout << " " << *(res->ev);
@@ -280,6 +278,22 @@ void computeDistances(std::string handsFile) {
     std::cout << "\n";
   }
   free_results(res);       
+}
+
+void computeEquities(std::string handsFile) {
+  std::ifstream file(handsFile);
+  std::string line;
+  std::string dead = "";
+  while (std::getline(file, line)) {
+    std::string hand = line.substr(0,4);
+    std::string board = line.substr(4);
+    std::cout << hand << board;
+    Results* res = alloc_results();    
+    calc(const_cast<char*>((hand+":"+"xx").c_str()), const_cast<char*>(board.c_str()), const_cast<char*>(dead.c_str()), 10000, res);
+    std::cout << " " << *(res->ev);
+    free_results(res);           
+    std::cout << "\n";
+  }
 }
 
 int cardNumber(std::string name) {
@@ -316,7 +330,7 @@ void encodeTurnBuckets(std::string flopHandsFile, std::string turnBucketsFile, s
       turnBuckets.push_back(empty);
     }
   }
-  std::cout << "DONE FLOPS" << std::endl;
+  std::cerr << "DONE FLOPS" << std::endl;
   {
     std::string line;
     std::ifstream file(turnDiscardsFile);
@@ -327,12 +341,12 @@ void encodeTurnBuckets(std::string flopHandsFile, std::string turnBucketsFile, s
       turnDiscards[key] = val;
     }
   }
-  std::cout << "DONE TURNS" << std::endl;  
+  std::cerr << "DONE TURNS" << std::endl;  
   {
     int iter = 0;
     std::string line;
     std::ifstream file(turnBucketsFile);
-    while (std::getline(file, line)) {      
+    while (std::getline(file, line)) {
       auto loc = line.find_first_of(' ');
       std::string key = line.substr(0, loc);
       std::string discard = turnDiscards[key];
@@ -430,11 +444,18 @@ void chooseDiscards(std::string distancesFile, std::string equityFile, std::stri
   {
     std::ifstream file(handsFile);
     std::string line;
+    // std::string error = "2c4d7c8c9cTc";
     while (std::getline(file, line)) {
       std::string hand = line.substr(0,4);
       std::string board = line.substr(4);
-      double maxeq = equities[line]/100;
+      double maxeq = 0;      
+      // double maxeq = equities[line]/100;
+      // double maxeq = equities[line] - 0.1; //Punish unpaired hands      
       std::string resp = "N";
+      std::vector<Card> handc;
+      for (std::size_t i = 0; 2*i < hand.size(); ++i) {
+	handc.push_back(Card(hand.substr(2*i, 2)));
+      }      
       std::vector<Card> boardc;
       for (std::size_t i = 0; 2*i < board.size(); ++i) {
 	boardc.push_back(Card(board.substr(2*i, 2)));
@@ -447,6 +468,9 @@ void chooseDiscards(std::string distancesFile, std::string equityFile, std::stri
       std::string key2 = translate(boardc,handc2);
       {
   	double b = singleEquities[key1];
+	// if (line == error) {
+	//   std::cout << " " << b;
+	// }	
   	if (b > maxeq) {
   	  maxeq = b;
   	  resp = "R";
@@ -454,12 +478,138 @@ void chooseDiscards(std::string distancesFile, std::string equityFile, std::stri
       }
       {
   	double b = singleEquities[key2];
+	// if (line == error) {
+	//   std::cout << " " << b;
+	// }		
   	if (b > maxeq) {
   	  maxeq = b;
   	  resp = "L";
   	}
+      }
+      {
+  	// double b = equities[line]/100;
+  	double b = equities[line];		
+	// if (line == error) {
+	//   std::cout << " " << b;
+	// }		
+  	if (b > maxeq) {
+	  bool pocketpair = (handc[0].rank() == handc[1].rank());
+	  
+	  bool lpair = false;
+	  for (Card& c : boardc) {
+	    if (c.rank() == handc[0].rank()) {
+	      lpair = true;
+	      break;
+	    }
+	  }
+	  bool rpair = false;
+	  for (Card& c : boardc) {
+	    if (c.rank() == handc[1].rank()) {
+	      rpair = true;
+	      break;
+	    }
+	  }
+	  bool twopair = (rpair && lpair);
+
+	  int lflush = 1;
+	  if (handc[0].suit() == handc[1].suit()) {
+	    lflush++;
+	  }
+	  for (Card & c : boardc) {
+	    if (c.suit() == handc[0].suit()) {
+	      lflush++;
+	    }
+	  }
+	  int rflush = 1;
+	  if (handc[0].suit() == handc[1].suit()) {
+	    rflush++;
+	  }
+	  for (Card & c : boardc) {
+	    if (c.suit() == handc[1].suit()) {
+	      rflush++;
+	    }
+	  }	  
+	  bool flush = (lflush >= 5) && (handc[0].suit() == handc[1].suit());
+
+	  std::size_t lstraight = 0;
+	  std::size_t lstri = 0;	  	  
+	  std::vector<Card> lstr = boardc;
+	  lstr.push_back(handc[0]);
+	  std::stable_sort(lstr.begin(), lstr.end(), [](auto &left, auto &right) {return left.rank() < right.rank();});
+	  while (lstraight + 1 < lstr.size() && (lstr[lstraight].rank() >= lstr[lstraight+1].rank() - 1)) {
+	    if (lstr[lstraight].rank() == lstr[lstraight+1].rank() - 1) {
+	      lstri++;
+	    }
+	    lstraight++;	    	    
+	  }
+	  if (lstr.front().rank() == 0 && lstr.back().rank() == 12) {
+	    lstri++;
+	  }
+	  std::size_t rstraight = 0;
+	  std::size_t rstri = 0;	  	  
+	  std::vector<Card> rstr = boardc;
+	  rstr.push_back(handc[1]);
+	  std::stable_sort(rstr.begin(), rstr.end(), [](auto &left, auto &right) {return left.rank() < right.rank();});
+	  while (rstraight + 1 < rstr.size() && (rstr[rstraight].rank() >= rstr[rstraight+1].rank() - 1)) {
+	    if (rstr[rstraight].rank() == rstr[rstraight+1].rank() - 1) {
+	      rstri++;
+	    }
+	    rstraight++;	    	    
+	  }
+	  if (rstr.front().rank() == 0 && rstr.back().rank() == 12) {
+	    rstri++;
+	  }	  
+	  std::size_t twostraightf = 0;
+	  std::size_t twostraightb = 0;
+	  std::size_t twostrif = 0;
+	  std::size_t twostrib = 0;	  	  
+	  std::vector<Card> twostr = boardc;
+	  twostr.push_back(handc[0]);
+	  twostr.push_back(handc[1]);	  
+	  std::stable_sort(twostr.begin(), twostr.end(), [](auto &left, auto &right) {return left.rank() < right.rank();});
+	  while (twostraightf + 1 < twostr.size() && (twostr[twostraightf].rank() >= twostr[twostraightf+1].rank() - 1)) {
+	    if (twostr[twostraightf].rank() == twostr[twostraightf+1].rank() - 1) {
+	      twostrif++;
+	    }
+	    twostraightf++;	    	    
+	  }
+	  if (twostr.front().rank() == 0 && twostr.back().rank() == 12) {
+	    twostrif++;
+	    twostrib++;
+	  }	  
+	  std::reverse(twostr.begin(), twostr.end());
+	  while (twostraightb + 1 < twostr.size() && (twostr[twostraightb].rank() <= twostr[twostraightb+1].rank() + 1)) {
+	    if (twostr[twostraightb].rank() == twostr[twostraightb+1].rank() + 1) {
+	      twostrib++;
+	    }
+	    twostraightb++;	    	    
+	  }
+	  bool straight = (twostrif >= 4 || twostrib >= 4) && (handc[0].rank() != handc[1].rank());
+
+	  bool madehand = pocketpair || twopair || flush || straight;
+	  if (madehand) {
+	    maxeq = b;
+	    resp = "N";
+	  }
+	  else if (resp == "L") {
+	    if ((lflush >= 5 || lstri >=4) && !(rflush >= 5 || rstri >= 4)) {
+	      resp = "R";
+	    }
+	  }
+	  else if (resp == "R") {
+	    if (!(lflush >= 5 || lstri >=4) && (rflush >= 5 || rstri >= 4)) {
+	      resp = "L";
+	    }
+	  }
+	  // if (line == error) {
+	  //   std::cout << " " << lflush << " " << rflush << " " << lstri << " " << rstri << std::endl;
+	  // }
+  	}
       }      
       std::cout << line << " " << resp << std::endl;
+      // if (line == error) {
+      //   exit(2);
+      // }		      
     }
   }
 }
@@ -484,12 +634,12 @@ void computeSingleEquities(std::string handsFile) {
     handc2.push_back(Card(hand.substr(2)));
     std::string key2 = translate(boardc,handc2);        
     if (equities.find(key1) == equities.end()) {
-      calc(const_cast<char*>((createRange(hand.substr(0,2))+":"+"xx").c_str()), const_cast<char*>(board.c_str()), const_cast<char*>(dead.c_str()), 10000, res);
+      calc(const_cast<char*>((createRange(hand.substr(0,2))+":"+"xx").c_str()), const_cast<char*>(board.c_str()), const_cast<char*>(dead.c_str()), 100000, res);
       equities[key1] = *(res->ev);
       std::cout << key1 << " " << *(res->ev) << std::endl;
     }
     if (equities.find(key2) == equities.end()) {
-      calc(const_cast<char*>((createRange(hand.substr(2))+":"+"xx").c_str()), const_cast<char*>(board.c_str()), const_cast<char*>(dead.c_str()), 10000, res);
+      calc(const_cast<char*>((createRange(hand.substr(2))+":"+"xx").c_str()), const_cast<char*>(board.c_str()), const_cast<char*>(dead.c_str()), 100000, res);
       equities[key2] = *(res->ev);
       std::cout << key2 << " " << *(res->ev) << std::endl;      
     }
@@ -498,27 +648,30 @@ void computeSingleEquities(std::string handsFile) {
   free_results(res);
 }
 
-void encodeAsInteger(std::string infile) {
+void encodeAsInteger(std::string discardFile) {
   std::string line;
-  std::ifstream file(infile);  
+  std::ifstream file(discardFile);
   while (std::getline(file, line)) {
     if (line == "N") {
       std::cout << 0 << std::endl;
     } else if (line == "L") {
       std::cout << 1 << std::endl;
-    } else if (line == "R") {
+    } else {
       std::cout << 2 << std::endl;
     }
   }
 }
 
+
 int main(int argc, char* argv[]) {
-  // encodeAsInteger("../data/FlopDiscardsEncoded.txt");
-  // computeEquities("../data/FlopHands.txt");  
+  // computeDistances("../data/TurnHands.txt");    
+  // computeEquities("../data/TurnHands.txt");  
   // computeSingleEquities("../data/TurnHands.txt");
-  // chooseDiscards("../data/TurnDistances.txt","../build/TurnSingleEquities.txt","../data/TurnHands.txt");
+  // chooseDiscards("../data/TurnDistances.txt","../data/TurnSingleEquities.txt","../data/TurnHands.txt");
+  // chooseDiscards("../data/FlopDistances.txt","../data/FlopSingleEquities.txt","../data/FlopHands.txt");    
   // genRandomTurns(1000000);
   encodeTurnBuckets("../data/FlopHands.txt", "../data/TurnAssignments.txt", "../data/TurnDiscards.txt");
+  // encodeAsInteger("../data/FlopDiscardsEncoded.txt");
   // for (int i = 0 ; i < 1300000 ; ++i) {
   //   std::cout << "1234567890123456789012345678901234567890123456789012" << std::endl;
   // }

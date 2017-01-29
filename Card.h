@@ -26,8 +26,8 @@ class Card {
   Card(int rank, int suit);
   Card(std::string name);  
   std::string toString();
-  int rank();
-  int suit();
+  int rank() const;
+  int suit() const;
   bool operator==(const Card &c1) const;
  private:
   int r;

@@ -32,11 +32,11 @@ std::string Card::toString() {
   return ranks[r] + suits[s];
 }
 
-int Card::rank() {
+int Card::rank() const {
   return r;
 }
 
-int Card::suit() {
+int Card::suit() const {
   return s;
 }
 

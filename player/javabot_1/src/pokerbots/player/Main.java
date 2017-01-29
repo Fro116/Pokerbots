@@ -52,8 +52,6 @@ public class Main {
 	
 	public static void main(String[] args) {
 		try {
-			Player player = new Player();
-
 			// Socket which will connect to the engine.
 			Socket socket = parseArgsToSocket(args);
 			if (socket == null) {
@@ -64,8 +62,8 @@ public class Main {
 			// Reader to read packets from engine
 			BufferedReader inStream = new BufferedReader(new InputStreamReader(
 					socket.getInputStream()));
-
-			player.init(outStream, inStream);
+			
+			Player player = new Player(outStream, inStream);
 			player.run();
 			
 			socket.close();
