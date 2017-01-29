@@ -487,8 +487,8 @@ void chooseDiscards(std::string distancesFile, std::string equityFile, std::stri
   	}
       }
       {
-  	// double b = equities[line]/100;
-  	double b = equities[line];		
+  	double b = equities[line]/100;
+  	// double b = equities[line];		
 	// if (line == error) {
 	//   std::cout << " " << b;
 	// }		
@@ -530,6 +530,7 @@ void chooseDiscards(std::string distancesFile, std::string equityFile, std::stri
 	    }
 	  }	  
 	  bool flush = (lflush >= 5) && (handc[0].suit() == handc[1].suit());
+	  bool flushdraw = (lflush >= 4) && (handc[0].suit() == handc[1].suit());	  
 
 	  std::size_t lstraight = 0;
 	  std::size_t lstri = 0;	  	  
@@ -585,8 +586,9 @@ void chooseDiscards(std::string distancesFile, std::string equityFile, std::stri
 	    twostraightb++;	    	    
 	  }
 	  bool straight = (twostrif >= 4 || twostrib >= 4) && (handc[0].rank() != handc[1].rank());
+	  bool openendedstraightdraw = (twostrif >= 3 || twostrib >= 3) && (handc[0].rank() != handc[1].rank());	  
 
-	  bool madehand = pocketpair || twopair || flush || straight;
+	  bool madehand = pocketpair || twopair || flush || straight || flushdraw || openendedstraightdraw;
 	  if (madehand) {
 	    maxeq = b;
 	    resp = "N";
@@ -670,8 +672,8 @@ int main(int argc, char* argv[]) {
   // chooseDiscards("../data/TurnDistances.txt","../data/TurnSingleEquities.txt","../data/TurnHands.txt");
   // chooseDiscards("../data/FlopDistances.txt","../data/FlopSingleEquities.txt","../data/FlopHands.txt");    
   // genRandomTurns(1000000);
-  encodeTurnBuckets("../data/FlopHands.txt", "../data/TurnAssignments.txt", "../data/TurnDiscards.txt");
-  // encodeAsInteger("../data/FlopDiscardsEncoded.txt");
+  // encodeTurnBuckets("../data/FlopHands.txt", "../data/TurnAssignments.txt", "../data/TurnDiscards.txt");
+  encodeAsInteger("../data/FlopDiscardsEncoded.txt");
   // for (int i = 0 ; i < 1300000 ; ++i) {
   //   std::cout << "1234567890123456789012345678901234567890123456789012" << std::endl;
   // }

@@ -247,11 +247,12 @@ public class Player {
 				} else {
 					perc = (double) (amount-oppRoundContribution) / (double) lastpot * 100;
 				}
+				boolean ourraise = words[2].equalsIgnoreCase(ourName);
 				if (perc <= 200) {
 					double a = 0;
 					double b = 200;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-					if (Math.random() < f) {
+					if (!ourraise && Math.random() < f) {
 						fakeCall = true;
 						interpretCall();
 					} else {
@@ -266,7 +267,7 @@ public class Player {
 					double a = 200;
 					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot * 100;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-					if (Math.random() < f) {
+					if (Math.random() < f || ourraise) {
 						if (fakeCheck) {
 							interpretBet();
 							fakeCheck = false;
@@ -338,11 +339,12 @@ public class Player {
 				} else {
 					perc = (double) (amount-oppRoundContribution) / (double) lastpot * 100;
 				}
+				boolean ourbet = words[2].equalsIgnoreCase(ourName);
 				if (perc <= 66) {
 					double a = 0;
 					double b = 66;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-					if (Math.random() < f) {
+					if (Math.random() < f && !ourbet) {
 						fakeCheck = true;
 						interpretCheck();
 					} else {
@@ -352,7 +354,7 @@ public class Player {
 					double a = 66;
 					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot * 100;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-					if (Math.random() < f) {
+					if (Math.random() < f || ourbet) {
 						interpretBet();
 					} else {
 						interpretAllin(true);
