@@ -367,6 +367,8 @@ public class Player {
 					oppRoundContribution = amount;
 				}
 			}
+			System.out.println("INTERPRETING MOVE AFTER"+action + " "+ourTotalContribution + " " +oppTotalContribution
+			+ " "+ourRoundContribution + " "+oppRoundContribution);
 		}
 	}
 
@@ -417,10 +419,23 @@ public class Player {
 		if (turn == 0) {
 			handHistory.clear();
 			roundHistory.clear();
+		} else if (turn == 3) {
+			boolean end = handHistory.get(handHistory.size()-1).equals("CHECK") ||
+					handHistory.get(handHistory.size()-1).equals("CALL");
+			while (!end) {
+				handHistory.remove(handHistory.size() - 1);
+				if (roundHistory.size() > 0) {
+					roundHistory.remove(roundHistory.size() - 1);
+				}
+				end = handHistory.get(handHistory.size()-1).equals("CHECK") ||
+						handHistory.get(handHistory.size()-1).equals("CALL");
+			}
 		} else {
 			while (!handHistory.get(handHistory.size()-1).equals("DCHECK")) {
 				handHistory.remove(handHistory.size() - 1);
-				roundHistory.clear();
+				if (roundHistory.size() > 0) {
+					roundHistory.remove(roundHistory.size() - 1);
+				}
 			}
 		}
 		if (bet) {
@@ -567,7 +582,7 @@ public class Player {
 	String processMove(String move, ArrayList<String> actions) {
 		if (fakeCheck) {
 			if (move.startsWith("BET")) {
-				move = "RAISE"+move.substring(5);
+				move = "RAISE"+move.substring(3);
 			} else if (move.equalsIgnoreCase("CHECK")) {
 				move = "CALL";
 			}
