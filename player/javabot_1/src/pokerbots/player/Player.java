@@ -155,7 +155,7 @@ public class Player {
 					board = newboard;
 					String move = determineMove();
 					System.out.println("PREPROCESSED MOVE "+move);
-					move = processMove(move);
+					move = processMove(move, actions);
 					System.out.println("PROCESSED MOVE "+move);
 					String action = makeMove(move, actions);
 					outStream.println(action);
@@ -564,7 +564,7 @@ public class Player {
 		}
 	}
 
-	String processMove(String move) {
+	String processMove(String move, ArrayList<String> actions) {
 		if (fakeCheck) {
 			if (move.startsWith("BET")) {
 				move = "RAISE"+move.substring(5);
@@ -578,6 +578,11 @@ public class Player {
 		if (move.equalsIgnoreCase("CALL")) {
 			if (handHistory.size() > 0 && handHistory.get(handHistory.size()-1).equalsIgnoreCase("RAISE99999")) {
 				move = "RAISE99999";
+			}
+		}
+		for (String action : actions) {
+			if (action.startsWith("DISCARD")) {
+				move = "DCHECK";
 			}
 		}
 		return move;
@@ -658,6 +663,8 @@ public class Player {
 							discard = 1;
 						} else if (val == 'R') {
 							discard = 2;
+						} else{
+							System.out.println("ERROR READING CHAR "+ flopkey + " " +val);
 						}
 					}
 					if (discard == 0) {
