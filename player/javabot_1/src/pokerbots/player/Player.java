@@ -248,9 +248,9 @@ public class Player {
 					perc = (double) (amount-oppRoundContribution) / (double) lastpot * 100;
 				}
 				boolean ourraise = words[2].equalsIgnoreCase(ourName);
-				if (perc <= 200) {
+				if (perc <= 100) {
 					double a = 0;
-					double b = 200;
+					double b = 100;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
 					if (!ourraise && Math.random() < f) {
 						fakeCall = true;
@@ -264,7 +264,7 @@ public class Player {
 						}
 					}
 				} else {
-					double a = 200;
+					double a = 100;
 					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot * 100;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
 					if (Math.random() < f || ourraise) {
@@ -369,8 +369,6 @@ public class Player {
 					oppRoundContribution = amount;
 				}
 			}
-			System.out.println("INTERPRETING MOVE AFTER"+action + " "+ourTotalContribution + " " +oppTotalContribution
-			+ " "+ourRoundContribution + " "+oppRoundContribution);
 		}
 	}
 
@@ -389,8 +387,8 @@ public class Player {
 				}
 			}
 		} else {
-			handHistory.add("RAISE200");
-			roundHistory.add("RAISE200");
+			handHistory.add("RAISE100");
+			roundHistory.add("RAISE100");
 		}
 	}
 
@@ -422,15 +420,9 @@ public class Player {
 			handHistory.clear();
 			roundHistory.clear();
 		} else if (turn == 3) {
-			boolean end = handHistory.get(handHistory.size()-1).equals("CHECK") ||
-					handHistory.get(handHistory.size()-1).equals("CALL");
-			while (!end) {
+			while (roundHistory.size() > 0) {
+				roundHistory.remove(roundHistory.size() - 1);
 				handHistory.remove(handHistory.size() - 1);
-				if (roundHistory.size() > 0) {
-					roundHistory.remove(roundHistory.size() - 1);
-				}
-				end = handHistory.get(handHistory.size()-1).equals("CHECK") ||
-						handHistory.get(handHistory.size()-1).equals("CALL");
 			}
 		} else {
 			while (!handHistory.get(handHistory.size()-1).equals("DCHECK")) {
@@ -571,8 +563,8 @@ public class Player {
 			System.out.println("ERROR: KEY " + key + " NOT FOUND");
 			System.out.println("ROUND HISTORY "+roundHistory);
 			System.out.println("HAND HISTORY "+roundHistory);
-//			//TODO better correction; find closest state
-//			if (roundHistory.get(roundHistory.size()-1).startsWith("RAISE")) {
+			//TODO better correction; find closest state
+//			if (roundHistory.size() > 0 && roundHistory.get(roundHistory.size()-1).startsWith("RAISE")) {
 //				roundHistory.remove(roundHistory.size()-1);
 //				handHistory.remove(handHistory.size()-1);
 //				return determineMove();
