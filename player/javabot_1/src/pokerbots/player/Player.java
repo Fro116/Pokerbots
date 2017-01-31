@@ -241,16 +241,16 @@ public class Player {
 			} else if (words[0].equalsIgnoreCase("RAISE")) {
 				int amount = Integer.parseInt(words[1]);
 				int lastpot = ourTotalContribution + oppTotalContribution;
-				double perc = 0;
+				double perc;
 				if (words[2].equalsIgnoreCase(ourName)) {
-					perc = (double) (amount-ourRoundContribution) / (double) lastpot * 100;
+					perc = (double) (amount-ourRoundContribution) / (double) lastpot;
 				} else {
-					perc = (double) (amount-oppRoundContribution) / (double) lastpot * 100;
+					perc = (double) (amount-oppRoundContribution) / (double) lastpot;
 				}
 				boolean ourraise = words[2].equalsIgnoreCase(ourName);
-				if (perc <= 100) {
+				if (perc <= 1.0) {
 					double a = 0;
-					double b = 100;
+					double b = 1.0;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
 					if (!ourraise && Math.random() < f) {
 						fakeCall = true;
@@ -264,8 +264,8 @@ public class Player {
 						}
 					}
 				} else {
-					double a = 100;
-					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot * 100;
+					double a = 1.0;
+					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
 					if (Math.random() < f || ourraise) {
 						if (fakeCheck) {
@@ -335,14 +335,14 @@ public class Player {
 				int lastpot = ourTotalContribution + oppTotalContribution;
 				double perc = 0;
 				if (words[2].equalsIgnoreCase(ourName)) {
-					perc = (double) (amount-ourRoundContribution) / (double) lastpot * 100;
+					perc = (double) (amount-ourRoundContribution) / (double) lastpot;
 				} else {
-					perc = (double) (amount-oppRoundContribution) / (double) lastpot * 100;
+					perc = (double) (amount-oppRoundContribution) / (double) lastpot;
 				}
 				boolean ourbet = words[2].equalsIgnoreCase(ourName);
-				if (perc <= 66) {
+				if (perc <= 0.66) {
 					double a = 0;
-					double b = 66;
+					double b = 0.66;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
 					if (Math.random() < f && !ourbet) {
 						fakeCheck = true;
@@ -351,8 +351,8 @@ public class Player {
 						interpretBet();
 					}
 				} else {
-					double a = 66;
-					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot * 100;
+					double a = 0.66;
+					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
 					if (Math.random() < f || ourbet) {
 						interpretBet();
@@ -550,10 +550,21 @@ public class Player {
 				total += value;
 				probs.add(value);
 			}
+			//remove choices that are under the threshold
+			double threshold = 0.20; //TODO
+			double newTotal = total;
+			for (int i = 0; i < probs.size(); ++i) {
+				double value = probs.get(i);
+				double perc = value / total;
+				if (perc < threshold) {
+					probs.set(i, 0.0);
+					newTotal -= value;
+				}
+			}
 			double rand = Math.random();
 			double counter = 0;
 			for (int i = 0; i < probs.size(); ++i) {
-				counter += probs.get(i) / total;
+				counter += probs.get(i) / newTotal;
 				if (rand < counter) {
 					return actions[i];
 				}
