@@ -150,8 +150,9 @@ public class Player {
 					for (int i = 0; i < numActions; ++i) {
 						actions.add(list[index++]);
 					}
+					System.out.println("BEFORE UPDATE " +key() + " "+history + " STATE: "+fakeCall+ " "+fakeCheck);
 					updateHistory(history);
-					System.out.println(key() + " "+history);
+					System.out.println("AFTER UPDATE " +key() + " "+history + " STATE: "+fakeCall+ " "+fakeCheck);
 					board = newboard;
 					String move = determineMove();
 					System.out.println("PREPROCESSED MOVE "+move);
@@ -248,34 +249,52 @@ public class Player {
 					perc = (double) (amount-oppRoundContribution) / (double) lastpot;
 				}
 				boolean ourraise = words[2].equalsIgnoreCase(ourName);
-				if (perc <= 1.0) {
-					double a = 0;
-					double b = 1.0;
+				if (outOfBook()) {
+					//force terminal decision
+					double a = Math.abs(ourRoundContribution-oppRoundContribution) / (double) lastpot; //CALL
+					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot; //ALLIN
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-					if (!ourraise && Math.random() < f) {
+					System.out.println("OUT OF BOOK");
+					System.out.println(handHistory);
+					System.out.println(roundHistory);
+					double r = Math.random();
+					System.out.println("VALUES "+a+ " "+b+ " "+r+ " " +f);
+					if (r < f) {
 						fakeCall = true;
 						interpretCall();
 					} else {
-						if (fakeCheck) {
-							interpretBet();
-							fakeCheck = false;
-						} else {
-							interpretRaise();
-						}
+						interpretAllin(false);
 					}
 				} else {
-					double a = 1.0;
-					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot;
-					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-					if (Math.random() < f || ourraise) {
-						if (fakeCheck) {
-							interpretBet();
-							fakeCheck = false;
+					if (perc <= 1.0) {
+						double a = Math.abs(ourRoundContribution-oppRoundContribution) / (double) lastpot;
+						double b = 1.0;
+						double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
+						if (!ourraise && Math.random() < f) {
+							fakeCall = true;
+							interpretCall();
 						} else {
-							interpretRaise();
+							if (fakeCheck) {
+								interpretBet();
+								fakeCheck = false;
+							} else {
+								interpretRaise();
+							}
 						}
 					} else {
-						interpretAllin(false);
+						double a = 1.0;
+						double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot;
+						double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
+						if (Math.random() < f || ourraise) {
+							if (fakeCheck) {
+								interpretBet();
+								fakeCheck = false;
+							} else {
+								interpretRaise();
+							}
+						} else {
+							interpretAllin(false);
+						}
 					}
 				}
 				if (words[2].equalsIgnoreCase(ourName)) {
@@ -322,13 +341,24 @@ public class Player {
 				ourRoundContribution = amount;
 				oppRoundContribution = amount;
 				if (fakeCheck) {
-					interpretCheck();
+					boolean checkedDown = false;
+					if (roundHistory.size() >= 2) {
+						String last = roundHistory.get(roundHistory.size()-1);
+						String prelast = roundHistory.get(roundHistory.size()-2);
+						if (last.equalsIgnoreCase("CHECK") && prelast.equalsIgnoreCase("CHECK")) {
+							checkedDown = true;
+						}
+					}
+					if (!checkedDown) {
+						interpretCheck();
+					}
 					fakeCheck = false;
-				}
-				if (fakeCall) {
-					fakeCall = false;
 				} else {
-					interpretCall();
+					if (fakeCall) {
+						fakeCall = false;
+					} else {
+						interpretCall();
+					}
 				}
 			} else if (words[0].equalsIgnoreCase("BET")) {
 				int amount = Integer.parseInt(words[1]);
@@ -389,6 +419,19 @@ public class Player {
 		} else {
 			handHistory.add("RAISE100");
 			roundHistory.add("RAISE100");
+		}
+	}
+
+	boolean outOfBook() {
+		//returns true if the opp makes too many raises
+		if (turn == 0) {
+			return (roundHistory.size() >= 2);
+		} else {
+			if (roundHistory.size() >= 1) {
+				String last = roundHistory.get(roundHistory.size()-1);
+				return last.startsWith("RAISE") && !last.equalsIgnoreCase("RAISE99999");
+			}
+			return false;
 		}
 	}
 
@@ -571,15 +614,10 @@ public class Player {
 			}
 			return actions[actions.length - 1];
 		} else {
+			//Do not change error handling; errors are used for correction elsewhere
 			System.out.println("ERROR: KEY " + key + " NOT FOUND");
 			System.out.println("ROUND HISTORY "+roundHistory);
 			System.out.println("HAND HISTORY "+roundHistory);
-			//TODO better correction; find closest state
-//			if (roundHistory.size() > 0 && roundHistory.get(roundHistory.size()-1).startsWith("RAISE")) {
-//				roundHistory.remove(roundHistory.size()-1);
-//				handHistory.remove(handHistory.size()-1);
-//				return determineMove();
-//			}
 			return "ERROR";
 		}
 	}
@@ -611,7 +649,7 @@ public class Player {
 	String makeMove(String move, ArrayList<String> possibleActions) {
 		if (move.startsWith("RAISE")) {
 			double perc = Double.parseDouble(move.substring(5));
-			int amount = (int) (Math.round((pot * perc) / 100)) + ourRoundContribution;
+			int amount = (int) (Math.floor((pot * perc) / 100)) + ourRoundContribution;
 			for (String action : possibleActions) {
 				String words[] = action.split(":");
 				if (words[0].equalsIgnoreCase("RAISE")) {
@@ -712,6 +750,7 @@ public class Player {
 				return makeMove("DCHECK", possibleActions);
 			}
 		}
+		//Dont change this behavior; it is used in error handling
 		System.out.println("ERROR: ATTEMPING TO DO MOVE " + move);
 		for (String action : possibleActions) {
 			if (action.compareToIgnoreCase("CHECK") == 0) {
