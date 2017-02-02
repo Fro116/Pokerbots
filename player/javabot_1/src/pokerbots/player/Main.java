@@ -62,7 +62,7 @@ public class Main {
 			// Reader to read packets from engine
 			BufferedReader inStream = new BufferedReader(new InputStreamReader(
 					socket.getInputStream()));
-			
+
 			Player player = new Player(outStream, inStream);
 			player.run();
 			

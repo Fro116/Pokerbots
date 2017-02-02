@@ -42,6 +42,9 @@ public class Player {
 	private boolean fakeCall = false;
 
 	private int startingStack = 200;
+	private int numHandsRemaining = 100000;
+	private int bankroll = 0;
+	private boolean checkFold = false;
 
 	public Player(PrintWriter output, BufferedReader input) {
 		this.outStream = output;
@@ -150,16 +153,20 @@ public class Player {
 					for (int i = 0; i < numActions; ++i) {
 						actions.add(list[index++]);
 					}
-					System.out.println("BEFORE UPDATE " +key() + " "+history + " STATE: "+fakeCall+ " "+fakeCheck);
+//					System.out.println("BEFORE UPDATE " +key() + " "+history + " STATE: "+fakeCall+ " "+fakeCheck);
 					updateHistory(history);
-					System.out.println("AFTER UPDATE " +key() + " "+history + " STATE: "+fakeCall+ " "+fakeCheck);
+//					System.out.println("AFTER UPDATE " +key() + " "+history + " STATE: "+fakeCall+ " "+fakeCheck);
 					board = newboard;
 					String move = determineMove();
-					System.out.println("PREPROCESSED MOVE "+move);
+//					System.out.println("PREPROCESSED MOVE "+move);
 					move = processMove(move, actions);
-					System.out.println("PROCESSED MOVE "+move);
+//					System.out.println("PROCESSED MOVE "+move);
 					String action = makeMove(move, actions);
-					outStream.println(action);
+					if (checkFold) { //TODO TURN OFF FOR FINAL TOURNAMENT
+						outStream.println("CHECK");
+					} else {
+						outStream.println(action);
+					}
 				} else if ("REQUESTKEYVALUES".compareToIgnoreCase(type) == 0) {
 					// At the end, engine will allow bot to send key/value pairs to store.
 					// FINISH indicates no more to store.
@@ -191,6 +198,15 @@ public class Player {
 				} else if ("NEWGAME".compareToIgnoreCase(type) == 0) {
 					ourName = list[1];
 					oppName = list[2];
+					numHandsRemaining = Integer.parseInt(list[5]);
+				} else if ("HANDOVER".compareToIgnoreCase(type) == 0) {
+					numHandsRemaining--;
+					bankroll = Integer.parseInt(list[1]);
+					int foldLoss = (int) Math.ceil(numHandsRemaining * 1.5);
+					if (bankroll > foldLoss) {
+						checkFold = true; //TODO TURN OFF FOR FINAL TOURNAMENT
+//						System.out.println("CHECK FOLDING TO VICTORY");
+					}
 				}
 			}
 		} catch (IOException e) {
@@ -254,11 +270,11 @@ public class Player {
 					double a = Math.abs(ourRoundContribution-oppRoundContribution) / (double) lastpot; //CALL
 					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot; //ALLIN
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-					System.out.println("OUT OF BOOK");
-					System.out.println(handHistory);
-					System.out.println(roundHistory);
+//					System.out.println("OUT OF BOOK");
+//					System.out.println(handHistory);
+//					System.out.println(roundHistory);
 					double r = Math.random();
-					System.out.println("VALUES "+a+ " "+b+ " "+r+ " " +f);
+//					System.out.println("VALUES "+a+ " "+b+ " "+r+ " " +f);
 					if (r < f) {
 						fakeCall = true;
 						interpretCall();
@@ -285,7 +301,7 @@ public class Player {
 						double a = 1.0;
 						double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot;
 						double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-						if (Math.random() < f || ourraise) {
+						if (Math.random() < f || ourraise || amount < 10) {
 							if (fakeCheck) {
 								interpretBet();
 								fakeCheck = false;
@@ -374,7 +390,7 @@ public class Player {
 					double a = 0;
 					double b = 0.66;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-					if (Math.random() < f && !ourbet) {
+					if (Math.random() < f && !ourbet && perc < 0.50) {
 						fakeCheck = true;
 						interpretCheck();
 					} else {
@@ -384,7 +400,7 @@ public class Player {
 					double a = 0.66;
 					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-					if (Math.random() < f || ourbet) {
+					if (Math.random() < f || ourbet || perc < 0.80) {
 						interpretBet();
 					} else {
 						interpretAllin(true);
@@ -615,9 +631,9 @@ public class Player {
 			return actions[actions.length - 1];
 		} else {
 			//Do not change error handling; errors are used for correction elsewhere
-			System.out.println("ERROR: KEY " + key + " NOT FOUND");
-			System.out.println("ROUND HISTORY "+roundHistory);
-			System.out.println("HAND HISTORY "+roundHistory);
+//			System.out.println("ERROR: KEY " + key + " NOT FOUND");
+//			System.out.println("ROUND HISTORY "+roundHistory);
+//			System.out.println("HAND HISTORY "+roundHistory);
 			return "ERROR";
 		}
 	}
@@ -631,7 +647,27 @@ public class Player {
 			}
 		}
 		if (fakeCall) {
-			move = "CALL";
+			if (roundHistory.size() >= 2) {
+				String last = roundHistory.get(roundHistory.size() - 1);
+				String prelast = roundHistory.get(roundHistory.size() - 2);
+				if (last.startsWith("RAISE") && prelast.startsWith("RAISE") && turn > 0) {
+					//out of book, maybe fold
+					roundHistory.remove(roundHistory.size() - 1);
+					roundHistory.remove(roundHistory.size() - 1);
+					String premove = determineMove();
+					if (premove.equalsIgnoreCase("RAISE")) {
+						move =  "CALL";
+					} else {
+						move = "FOLD";
+					}
+					roundHistory.add(prelast);
+					roundHistory.add(last);
+				} else {
+					move = "CALL";
+				}
+			} else {
+				move = "CALL";
+			}
 		}
 		if (move.equalsIgnoreCase("CALL")) {
 			if (handHistory.size() > 0 && handHistory.get(handHistory.size()-1).equalsIgnoreCase("RAISE99999")) {
@@ -722,7 +758,7 @@ public class Player {
 						} else if (val == 'R') {
 							discard = 2;
 						} else{
-							System.out.println("ERROR READING CHAR "+ flopkey + " " +val);
+//							System.out.println("ERROR READING CHAR "+ flopkey + " " +val);
 						}
 					}
 					if (discard == 0) {
@@ -751,7 +787,7 @@ public class Player {
 			}
 		}
 		//Dont change this behavior; it is used in error handling
-		System.out.println("ERROR: ATTEMPING TO DO MOVE " + move);
+//		System.out.println("ERROR: ATTEMPING TO DO MOVE " + move);
 		for (String action : possibleActions) {
 			if (action.compareToIgnoreCase("CHECK") == 0) {
 				return "CHECK";
