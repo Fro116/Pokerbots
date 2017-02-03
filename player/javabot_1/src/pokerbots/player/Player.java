@@ -43,6 +43,9 @@ public class Player {
 
 	private int startingStack = 200;
 	private int numHandsRemaining = 100000;
+	private int numHandsPlayed = 0;
+	private int rollingPreflopAllinCounter = 0;
+	private boolean preflopAlliner = false;
 	private int bankroll = 0;
 	private boolean checkFold = false;
 
@@ -200,6 +203,7 @@ public class Player {
 					oppName = list[2];
 					numHandsRemaining = Integer.parseInt(list[5]);
 				} else if ("HANDOVER".compareToIgnoreCase(type) == 0) {
+					numHandsPlayed++;
 					numHandsRemaining--;
 					bankroll = Integer.parseInt(list[1]);
 					int foldLoss = (int) Math.ceil(numHandsRemaining * 1.5);
@@ -207,6 +211,15 @@ public class Player {
 						checkFold = true; //TODO TURN OFF FOR FINAL TOURNAMENT
 //						System.out.println("CHECK FOLDING TO VICTORY");
 					}
+					if (numHandsPlayed >= 100 && rollingPreflopAllinCounter > 0) {
+						rollingPreflopAllinCounter--;
+					}
+					if ((double) rollingPreflopAllinCounter/100.0 >= 0.40) {
+						preflopAlliner = true;
+					} else {
+						preflopAlliner = false;
+					}
+					System.out.println("ALLINER? "+preflopAlliner+ " "+ rollingPreflopAllinCounter);
 				}
 			}
 		} catch (IOException e) {
@@ -265,6 +278,15 @@ public class Player {
 					perc = (double) (amount-oppRoundContribution) / (double) lastpot;
 				}
 				boolean ourraise = words[2].equalsIgnoreCase(ourName);
+				double standardraise = 1.0;
+				if (turn == 0) {
+					standardraise = 1.67;
+					if (roundHistory.size() >= 1) {
+						if (roundHistory.get(roundHistory.size()-1).equalsIgnoreCase("RAISE167")) {
+							standardraise = 2.38;
+						}
+					}
+				}
 				if (outOfBook()) {
 					//force terminal decision
 					double a = Math.abs(ourRoundContribution-oppRoundContribution) / (double) lastpot; //CALL
@@ -282,9 +304,9 @@ public class Player {
 						interpretAllin(false);
 					}
 				} else {
-					if (perc <= 1.0) {
+					if (perc <= standardraise) {
 						double a = Math.abs(ourRoundContribution-oppRoundContribution) / (double) lastpot;
-						double b = 1.0;
+						double b = standardraise;
 						double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
 						if (!ourraise && Math.random() < f && !(perc >= 0.75)) {
 							fakeCall = true;
@@ -298,7 +320,7 @@ public class Player {
 							}
 						}
 					} else {
-						double a = 1.0;
+						double a = standardraise;
 						double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot;
 						double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
 						if (Math.random() < f || ourraise || amount < 10 || perc <= 1.25) {
@@ -476,6 +498,9 @@ public class Player {
 
 	void interpretAllin(boolean bet) {
 		if (turn == 0) {
+			if (roundHistory.size() <= 1) {
+				rollingPreflopAllinCounter++;
+			}
 			handHistory.clear();
 			roundHistory.clear();
 		} else if (turn == 3) {
@@ -617,6 +642,21 @@ public class Player {
 			if (turn >= 2) {
 				threshold = 0.25;
 			}
+			if (preflopAlliner) {
+				if (roundHistory.size() > 0) {
+					if (roundHistory.get(roundHistory.size()-1).equalsIgnoreCase("RAISE99999")) {
+						System.out.println("PROBS BEFORE "+probs);
+						//call more often and fold less
+						probs.set(0,probs.get(0)+0.10*total);
+						probs.set(1,probs.get(1)-0.10*total);
+						if (probs.get(1) < 0) {
+							probs.set(1,0.0);
+							total = probs.get(0);
+						}
+						System.out.println("PROBS AFTER "+probs);
+					}
+				}
+			}
 			double newTotal = total;
 			for (int i = 0; i < probs.size(); ++i) {
 				double value = probs.get(i);
@@ -645,6 +685,9 @@ public class Player {
 	}
 
 	String processMove(String move, ArrayList<String> actions) {
+		if (preflopAlliner && move.equalsIgnoreCase("RAISE167")) {
+			move = "RAISE100";
+		}
 		if (fakeCheck) {
 			if (move.startsWith("BET")) {
 				move = "RAISE"+move.substring(3);
