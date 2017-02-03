@@ -153,9 +153,9 @@ public class Player {
 					for (int i = 0; i < numActions; ++i) {
 						actions.add(list[index++]);
 					}
-//					System.out.println("BEFORE UPDATE " +key() + " "+history + " STATE: "+fakeCall+ " "+fakeCheck);
+					System.out.println("BEFORE UPDATE " +key() + " "+history + " STATE: "+fakeCall+ " "+fakeCheck);
 					updateHistory(history);
-//					System.out.println("AFTER UPDATE " +key() + " "+history + " STATE: "+fakeCall+ " "+fakeCheck);
+					System.out.println("AFTER UPDATE " +key() + " "+history + " STATE: "+fakeCall+ " "+fakeCheck);
 					board = newboard;
 					String move = determineMove();
 //					System.out.println("PREPROCESSED MOVE "+move);
@@ -270,9 +270,9 @@ public class Player {
 					double a = Math.abs(ourRoundContribution-oppRoundContribution) / (double) lastpot; //CALL
 					double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot; //ALLIN
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-//					System.out.println("OUT OF BOOK");
-//					System.out.println(handHistory);
-//					System.out.println(roundHistory);
+					System.out.println("OUT OF BOOK");
+					System.out.println(handHistory);
+					System.out.println(roundHistory);
 					double r = Math.random();
 //					System.out.println("VALUES "+a+ " "+b+ " "+r+ " " +f);
 					if (r < f) {
@@ -286,7 +286,7 @@ public class Player {
 						double a = Math.abs(ourRoundContribution-oppRoundContribution) / (double) lastpot;
 						double b = 1.0;
 						double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-						if (!ourraise && Math.random() < f) {
+						if (!ourraise && Math.random() < f && !(perc >= 0.75)) {
 							fakeCall = true;
 							interpretCall();
 						} else {
@@ -301,7 +301,7 @@ public class Player {
 						double a = 1.0;
 						double b = ((startingStack-oppTotalContribution)-oppRoundContribution) / (double) lastpot;
 						double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-						if (Math.random() < f || ourraise || amount < 10) {
+						if (Math.random() < f || ourraise || amount < 10 || perc <= 1.25) {
 							if (fakeCheck) {
 								interpretBet();
 								fakeCheck = false;
@@ -379,7 +379,7 @@ public class Player {
 			} else if (words[0].equalsIgnoreCase("BET")) {
 				int amount = Integer.parseInt(words[1]);
 				int lastpot = ourTotalContribution + oppTotalContribution;
-				double perc = 0;
+				double perc;
 				if (words[2].equalsIgnoreCase(ourName)) {
 					perc = (double) (amount-ourRoundContribution) / (double) lastpot;
 				} else {
@@ -390,7 +390,7 @@ public class Player {
 					double a = 0;
 					double b = 0.66;
 					double f = (b-perc)*(1+a) / ((b-a)*(1+perc));
-					if (Math.random() < f && !ourbet && perc < 0.50) {
+					if (Math.random() < f && !ourbet && !(perc >= 0.45)) {
 						fakeCheck = true;
 						interpretCheck();
 					} else {
@@ -610,7 +610,13 @@ public class Player {
 				probs.add(value);
 			}
 			//remove choices that are under the threshold
-			double threshold = 0.20; //TODO
+			double threshold = 0.15; //TODO
+			if (turn == 1) {
+				threshold = 0.20;
+			}
+			if (turn >= 2) {
+				threshold = 0.25;
+			}
 			double newTotal = total;
 			for (int i = 0; i < probs.size(); ++i) {
 				double value = probs.get(i);
@@ -631,9 +637,9 @@ public class Player {
 			return actions[actions.length - 1];
 		} else {
 			//Do not change error handling; errors are used for correction elsewhere
-//			System.out.println("ERROR: KEY " + key + " NOT FOUND");
-//			System.out.println("ROUND HISTORY "+roundHistory);
-//			System.out.println("HAND HISTORY "+roundHistory);
+			System.out.println("ERROR: KEY " + key + " NOT FOUND");
+			System.out.println("ROUND HISTORY "+roundHistory);
+			System.out.println("HAND HISTORY "+roundHistory);
 			return "ERROR";
 		}
 	}
@@ -758,7 +764,7 @@ public class Player {
 						} else if (val == 'R') {
 							discard = 2;
 						} else{
-//							System.out.println("ERROR READING CHAR "+ flopkey + " " +val);
+							System.out.println("ERROR READING CHAR "+ flopkey + " " +val);
 						}
 					}
 					if (discard == 0) {
@@ -787,7 +793,7 @@ public class Player {
 			}
 		}
 		//Dont change this behavior; it is used in error handling
-//		System.out.println("ERROR: ATTEMPING TO DO MOVE " + move);
+		System.out.println("ERROR: ATTEMPING TO DO MOVE " + move);
 		for (String action : possibleActions) {
 			if (action.compareToIgnoreCase("CHECK") == 0) {
 				return "CHECK";
