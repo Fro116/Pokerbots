@@ -45,9 +45,11 @@ public class Player {
 	private int numHandsRemaining = 100000;
 	private int numHandsPlayed = 0;
 	private int rollingPreflopAllinCounter = 0;
+	private ArrayList<Boolean> rollingPreflopArray = new ArrayList<>();
+	private boolean countedPreflop = false;
 	private boolean preflopAlliner = false;
 	private int bankroll = 0;
-	private boolean checkFold = false;
+//	private boolean checkFold = false;
 
 	public Player(PrintWriter output, BufferedReader input) {
 		this.outStream = output;
@@ -165,11 +167,11 @@ public class Player {
 					move = processMove(move, actions);
 //					System.out.println("PROCESSED MOVE "+move);
 					String action = makeMove(move, actions);
-					if (checkFold) { //TODO TURN OFF FOR FINAL TOURNAMENT
-						outStream.println("CHECK");
-					} else {
-						outStream.println(action);
-					}
+//					if (checkFold) { //TODO TURN OFF FOR FINAL TOURNAMENT
+//						outStream.println("CHECK");
+//					} else {
+					outStream.println(action);
+//					}
 				} else if ("REQUESTKEYVALUES".compareToIgnoreCase(type) == 0) {
 					// At the end, engine will allow bot to send key/value pairs to store.
 					// FINISH indicates no more to store.
@@ -198,21 +200,30 @@ public class Player {
 					discardState = false;
 					fakeCheck = false;
 					fakeCall = false;
+					countedPreflop = false;
 				} else if ("NEWGAME".compareToIgnoreCase(type) == 0) {
 					ourName = list[1];
 					oppName = list[2];
 					numHandsRemaining = Integer.parseInt(list[5]);
 				} else if ("HANDOVER".compareToIgnoreCase(type) == 0) {
+					if (!countedPreflop) {
+						rollingPreflopArray.add(false);
+					}
 					numHandsPlayed++;
 					numHandsRemaining--;
 					bankroll = Integer.parseInt(list[1]);
 					int foldLoss = (int) Math.ceil(numHandsRemaining * 1.5);
 					if (bankroll > foldLoss) {
-						checkFold = true; //TODO TURN OFF FOR FINAL TOURNAMENT
+//						checkFold = true; //TODO TURN OFF FOR FINAL TOURNAMENT
 //						System.out.println("CHECK FOLDING TO VICTORY");
 					}
-					if (numHandsPlayed >= 100 && rollingPreflopAllinCounter > 0) {
-						rollingPreflopAllinCounter--;
+					if (numHandsPlayed >= 100) {
+						if (rollingPreflopArray.size() > 0) {
+							if (rollingPreflopArray.get(0) == true) {
+								rollingPreflopAllinCounter--;
+							}
+							rollingPreflopArray.remove(0);
+						}
 					}
 					if ((double) rollingPreflopAllinCounter/100.0 >= 0.40) {
 						preflopAlliner = true;
@@ -498,8 +509,10 @@ public class Player {
 
 	void interpretAllin(boolean bet) {
 		if (turn == 0) {
-			if (roundHistory.size() <= 1) {
+			if (handHistory.size() <= 1) {
 				rollingPreflopAllinCounter++;
+				rollingPreflopArray.add(true);
+				countedPreflop = true;
 			}
 			handHistory.clear();
 			roundHistory.clear();
@@ -646,9 +659,13 @@ public class Player {
 				if (roundHistory.size() > 0) {
 					if (roundHistory.get(roundHistory.size()-1).equalsIgnoreCase("RAISE99999")) {
 						System.out.println("PROBS BEFORE "+probs);
+						double effect = 0.10;
+						if (rollingPreflopAllinCounter/100 >= 0.60) {
+							effect = 0.15;
+						}
 						//call more often and fold less
-						probs.set(0,probs.get(0)+0.10*total);
-						probs.set(1,probs.get(1)-0.10*total);
+						probs.set(0,probs.get(0)+effect*total);
+						probs.set(1,probs.get(1)-effect*total);
 						if (probs.get(1) < 0) {
 							probs.set(1,0.0);
 							total = probs.get(0);
@@ -686,7 +703,11 @@ public class Player {
 
 	String processMove(String move, ArrayList<String> actions) {
 		if (preflopAlliner && move.equalsIgnoreCase("RAISE167")) {
-			move = "RAISE100";
+			if (handHistory.size() == 0) {
+				move = "CALL"; //TODO CHANGE FOR FINAL TOURNAMENT
+			} else {
+				move = "RAISE100";
+			}
 		}
 		if (fakeCheck) {
 			if (move.startsWith("BET")) {

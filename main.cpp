@@ -578,7 +578,7 @@ void chooseDiscards(std::string distancesFile, std::string equityFile, std::stri
       }
       {
   	// double b = equities[line]/100;
-  	double b = equities[line];		
+	double b = equities[line];		
 	if (line == error) {
 	  std::cout << " " << b;
 	}		
@@ -641,7 +641,30 @@ void chooseDiscards(std::string distancesFile, std::string equityFile, std::stri
 	  }
 	}	  
 	bool flush = (lflush >= 5) && (handc[0].suit() == handc[1].suit());
-	bool flushdraw = (lflush >= 4) && (handc[0].suit() == handc[1].suit());	  
+	bool flushdraw = (lflush >= 4) && (handc[0].suit() == handc[1].suit());
+
+	std::vector<Card> lpool = boardc;
+	lpool.push_back(handc[0]);
+	int lstro = 0;
+	for (int r = 0; r < 13; ++r) {
+	  if (isStraight(lpool,r)) {
+	    lstro++;
+	  }
+	}
+	std::vector<Card> rpool = boardc;
+	rpool.push_back(handc[1]);
+	int rstro = 0;
+	for (int r = 0; r < 13; ++r) {
+	  if (isStraight(rpool,r)) {
+	    rstro++;
+	  }
+	}
+	int bstro = 0;
+	for (int r = 0; r < 13; ++r) {
+	  if (isStraight(boardc,r)) {
+	    bstro++;
+	  }
+	}	
 
 	std::size_t lstraight = 0;
 	std::size_t lstri = 0;	  	  
@@ -713,8 +736,11 @@ void chooseDiscards(std::string distancesFile, std::string equityFile, std::stri
 	bool fixed = false;
 	bool lmade = (lflush >= 5 || lstri >= 4 || lpairc >= 2 || (lpair && boardpair));
 	bool rmade = (rflush >= 5 || rstri >= 4 || rpairc >= 2 || (rpair && boardpair));
-	bool ldraw = (lflush >= 4 || lstri >= 3) && !rpair;
-	bool rdraw = (rflush >= 4 || rstri >= 3) && !lpair;
+	// bool ldraw = (lflush >= 4 || (lstri >= 3 && lstr.back().rank() != 12));
+	// bool rdraw = (rflush >= 4 || (rstri >= 3 && rstr.back().rank() != 12));
+	bool ldraw = (lflush >= 4 || (lstro > 1 && lstro > bstro));
+	bool rdraw = (rflush >= 4 || (rstro > 1 && rstro > bstro));		      
+	
 	
 	if (b > maxeq && nmade) {
 	  maxeq = b;
@@ -735,20 +761,6 @@ void chooseDiscards(std::string distancesFile, std::string equityFile, std::stri
 	  }
 	}
 	if (!fixed) {
-	  // if (resp == "L") {
-	  //   if (ldraw && !rdraw) {
-	  //     resp = "R";
-	  //   }
-	  // }
-	  // else if (resp == "R") {
-	  //   if (rdraw && !ldraw) {
-	  //     resp = "L";
-	  //   }
-	  // }
-	  // if (b > maxeq && ndraw) {
-	  //   maxeq = b;
-	  //   resp = "N";
-	  // }	  
 	  int louts = outs(handc[0], boardc, handc[1]);
 	  int routs = outs(handc[1], boardc, handc[0]);
 	  int nouts = 0;
@@ -783,6 +795,11 @@ void chooseDiscards(std::string distancesFile, std::string equityFile, std::stri
 	    maxouts = nouts;
 	    maxeq = b;
 	    resp = "N";
+	  }
+	  if (((lpair && rdraw) || (rpair && ldraw))) {
+	    maxouts = nouts;
+	    maxeq = b;
+	    resp = "N";	    
 	  }
 	  if (line == error) {
 	    std::cout << " " << louts << " " << routs << std::endl;
@@ -874,7 +891,7 @@ int main(int argc, char* argv[]) {
   // chooseDiscards("../data/TurnDistances.txt","../data/TurnSingleEquities.txt","../data/TurnHands.txt");
   // chooseDiscards("../data/FlopDistances.txt","../data/FlopSingleEquities.txt","../data/FlopHands.txt");    
   // genRandomTurns(1000000);
-  encodeTurnBuckets("../data/FlopHands.txt", "../data/TurnAssignments.txt", "../data/TurnDiscards.txt");
+  // encodeTurnBuckets("../data/FlopHands.txt", "../data/TurnAssignments.txt", "../data/TurnDiscards.txt");
   // encodeAsInteger("../data/FlopDiscardsEncoded.txt");
   // for (int i = 0 ; i < 1300000 ; ++i) {
   //   std::cout << "1234567890123456789012345678901234567890123456789012" << std::endl;
